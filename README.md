@@ -51,10 +51,7 @@ app/build/outputs/apk/debug/app-debug.apk
 
 ## Estado de verificación
 
-Compilado con `:app:assembleDebug` y probado en un emulador API 37
-(`emulator-5554`): reproducción, pausa, siguiente/anterior, cola, biblioteca,
-álbumes, búsqueda, favoritos, listas, importación, descarga HTTPS, notificación,
-pantalla de bloqueo y persistencia tras reiniciar el proceso.
+El apk se ha instalado en un vivo v40 80w con la version de android 16 y todos los apartados de la app funcionan correctamente
 
 ## Limitaciones
 
