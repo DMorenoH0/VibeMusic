@@ -3,7 +3,7 @@
 Reproductor de música local para Android con interfaz Compose en negro/rojo.
 La app trabaja con audio del dispositivo, archivos importados por el usuario,
 descargas directas por HTTPS y seis instrumentales originales incluidos como
-muestras. No incluye ni extrae catálogos de plataformas de streaming.
+muestras. No incluye ni extrae catálogos de plataformas de streaming, estoy trabajando para implementarlos.
 
 ## Funciones
 
