@@ -58,7 +58,6 @@ pantalla de bloqueo y persistencia tras reiniciar el proceso.
 
 ## Limitaciones
 
-- No se ha probado en un teléfono físico.
 - Las descargas solo aceptan URLs HTTPS directas; no hay scraping ni extracción
   de audio de YouTube.
 - No se ofrece un catálogo comercial ilimitado.
