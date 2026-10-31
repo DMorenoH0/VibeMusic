@@ -51,7 +51,7 @@ app/build/outputs/apk/debug/app-debug.apk
 
 ## Estado de verificación
 
-El apk se ha instalado en un vivo v40 80w con la version de android 16 y todos los apartados de la app funcionan correctamente
+El apk se ha instalado en un vivo v40 con la version de android 16 y todos los apartados de la app funcionan correctamente
 
 ## Limitaciones
 
