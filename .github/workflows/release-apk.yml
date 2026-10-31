@@ -1,0 +1,60 @@
+name: Build and publish VibeMusic APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[release]')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK components
+        run: |
+          sdkmanager "platforms;android-35" "build-tools;36.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APK
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon assembleDebug
+
+      - name: Prepare APK for release
+        run: |
+          mkdir -p release
+          cp app/build/outputs/apk/debug/app-debug.apk release/VibeMusic.apk
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: VibeMusic v1.0.${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          body: |
+            Instalador Android de VibeMusic.
+
+            Descarga **VibeMusic.apk** e instálalo en tu dispositivo Android.
+            Esta es una compilación debug generada automáticamente desde el código de este repositorio.
+          files: release/VibeMusic.apk
+          draft: false
+          prerelease: false
+          make_latest: true
