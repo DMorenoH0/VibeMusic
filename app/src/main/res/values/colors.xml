@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#07070A</color>
+    <color name="vibe_red">#FF3B30</color>
+    <color name="vibe_black">#07070A</color>
+    <color name="white">#FFFFFFFF</color>
+</resources>

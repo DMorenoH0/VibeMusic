@@ -1,0 +1,46 @@
+# Android / Gradle
+.gradle/
+.kotlin/
+build/
+*/build/
+app/build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# Kotlin
+*.kotlin_module
+
+# Signing material
+*.jks
+*.keystore
+keystore.properties
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# macOS / Linux
+.DS_Store
+*~
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp

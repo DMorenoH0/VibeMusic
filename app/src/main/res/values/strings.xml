@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">VibeMusic</string>
+    <string name="channel_name">Reproducción</string>
+    <string name="channel_description">Controles de reproducción de VibeMusic</string>
+    <string name="play">Reproducir</string>
+    <string name="pause">Pausar</string>
+    <string name="next">Siguiente</string>
+    <string name="previous">Anterior</string>
+    <string name="favorite">Favorito</string>
+    <string name="search">Buscar</string>
+    <string name="settings">Ajustes</string>
+    <string name="notification_permission">VibeMusic usa una notificación multimedia para controlar la reproducción en segundo plano.</string>
+</resources>
