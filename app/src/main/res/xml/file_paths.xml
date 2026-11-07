@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <external-files-path name="vibe_updates" path="." />
+    <cache-path name="vibe_cache" path="." />
+    <files-path name="vibe_files" path="." />
+</paths>

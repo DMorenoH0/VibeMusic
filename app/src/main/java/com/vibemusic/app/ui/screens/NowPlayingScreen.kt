@@ -232,6 +232,21 @@ fun NowPlayingScreen(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                if (current.source == com.vibemusic.app.data.model.TrackSource.ONLINE) {
+                    Spacer(Modifier.height(8.dp))
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = VibeRed.copy(alpha = 0.16f)
+                    ) {
+                        Text(
+                            "VISTA PREVIA DE 30 S · DEEZER",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = VibeRed,
+                            letterSpacing = 0.8.sp,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+                }
                 Spacer(Modifier.height(22.dp))
 
                 var dragging by remember { mutableStateOf(false) }

@@ -56,8 +56,23 @@ private suspend fun loadArtwork(context: Context, uriString: String): Bitmap? =
     withContext(Dispatchers.IO) {
         ArtworkCache.get(uriString)?.let { return@withContext it }
         runCatching {
-            context.contentResolver.openInputStream(Uri.parse(uriString))?.use { stream ->
-                val bitmap = BitmapFactory.decodeStream(stream) ?: return@use null
+            val stream = if (uriString.startsWith("https://", ignoreCase = true)) {
+                val connection = java.net.URL(uriString).openConnection() as java.net.HttpURLConnection
+                connection.connectTimeout = 12_000
+                connection.readTimeout = 15_000
+                connection.instanceFollowRedirects = true
+                connection.setRequestProperty("User-Agent", "VibeMusic/1.1 (Android)")
+                connection.setRequestProperty("Accept", "image/*")
+                if (connection.responseCode !in 200..299) {
+                    connection.disconnect()
+                    return@runCatching null
+                }
+                connection.inputStream
+            } else {
+                context.contentResolver.openInputStream(Uri.parse(uriString))
+            }
+            stream?.use { input ->
+                val bitmap = BitmapFactory.decodeStream(input) ?: return@use null
                 val scaled = if (bitmap.width > 720 || bitmap.height > 720) {
                     val ratio = min(720f / bitmap.width, 720f / bitmap.height)
                     Bitmap.createScaledBitmap(

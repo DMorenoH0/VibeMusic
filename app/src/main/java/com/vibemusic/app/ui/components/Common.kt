@@ -130,6 +130,7 @@ fun TrackRow(
     isCurrent: Boolean = false,
     isPlaying: Boolean = false,
     showAlbum: Boolean = true,
+    caption: String? = null,
     onClick: () -> Unit,
     onFavorite: (() -> Unit)? = null,
     onMore: (() -> Unit)? = null
@@ -171,6 +172,29 @@ fun TrackRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            if (!caption.isNullOrBlank()) {
+                Text(
+                    text = caption,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = VibeMuted.copy(alpha = 0.8f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        if (track.source == com.vibemusic.app.data.model.TrackSource.ONLINE) {
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = VibeRed.copy(alpha = 0.16f)
+            ) {
+                Text(
+                    "30 s",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = VibeRed,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
+            Spacer(Modifier.width(4.dp))
         }
         Text(
             text = formatDuration(track.durationMs),

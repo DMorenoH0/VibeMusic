@@ -101,4 +101,20 @@ abstract class VibeDao {
 
     @Query("SELECT * FROM downloads WHERE trackId = :trackId")
     abstract suspend fun getDownload(trackId: String): DownloadEntity?
+
+    @Query("SELECT * FROM downloads")
+    abstract suspend fun allDownloads(): List<DownloadEntity>
+
+    // ---------- Data erasure ----------
+    @Query("DELETE FROM favorites")
+    abstract suspend fun clearFavorites()
+
+    @Query("DELETE FROM playlists")
+    abstract suspend fun clearPlaylists()
+
+    @Query("DELETE FROM playlist_tracks")
+    abstract suspend fun clearPlaylistTracks()
+
+    @Query("DELETE FROM downloads")
+    abstract suspend fun clearDownloads()
 }

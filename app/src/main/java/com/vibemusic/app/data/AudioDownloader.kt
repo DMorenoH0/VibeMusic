@@ -256,8 +256,14 @@ class AudioDownloader(private val context: Context) {
         }
     }
 
-    private fun ensureNetwork(wifiOnly: Boolean) {
-        val manager = context.getSystemService(ConnectivityManager::class.java)
+    fun deleteAppAudio(deleteFiles: Boolean) {
+        if (!deleteFiles) return
+        File(context.filesDir, "downloads").let { dir ->
+            if (dir.exists()) dir.deleteRecursively()
+        }
+    }
+
+    private fun ensureNetwork(wifiOnly: Boolean) {        val manager = context.getSystemService(ConnectivityManager::class.java)
             ?: throw AudioException("No se pudo comprobar la conexión.")
         val network = manager.activeNetwork ?: throw AudioException("Sin conexión a Internet.")
         val caps = manager.getNetworkCapabilities(network)

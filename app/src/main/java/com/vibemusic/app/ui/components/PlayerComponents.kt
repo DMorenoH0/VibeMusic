@@ -23,6 +23,7 @@ import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -141,13 +142,14 @@ fun VibeBottomBar(
 ) {
     NavigationBar(
         modifier = modifier,
-        containerColor = Color(0xFF09090C),
+        containerColor = VibeBlackSoft,
         tonalElevation = 0.dp
     ) {
         val items = listOf(
             Triple(Icons.Rounded.Home, "Inicio", 0),
-            Triple(Icons.Rounded.Explore, "Explorar", 1),
-            Triple(Icons.Rounded.LibraryMusic, "Biblioteca", 2)
+            Triple(Icons.Rounded.Search, "Buscar", 1),
+            Triple(Icons.Rounded.Explore, "Explorar", 2),
+            Triple(Icons.Rounded.LibraryMusic, "Biblioteca", 3)
         )
         items.forEach { (icon, label, index) ->
             NavigationBarItem(

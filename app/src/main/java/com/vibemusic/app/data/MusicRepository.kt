@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -142,6 +143,7 @@ class MusicRepository(context: Context, val settings: SettingsStore) {
 
     // ---------------- Recent ----------------
     suspend fun recordRecent(track: Track) = withContext(Dispatchers.IO) {
+        if (!track.isPersistable) return@withContext
         if (track.source == TrackSource.LOCAL && !scanner.hasPermission()) return@withContext
         dao.upsertRecent(track.toRecent())
         dao.trimRecent()
@@ -195,6 +197,34 @@ class MusicRepository(context: Context, val settings: SettingsStore) {
 
     fun downloadedFileExists(track: Track): Boolean =
         track.fileName?.let { File(it).exists() } ?: false
+
+    /**
+     * Erases every record VibeMusic owns. Personal audio outside the app is
+     * never touched; app-managed downloaded/imported copies are removed only
+     * when [deleteAudio] is explicitly true.
+     */
+    suspend fun wipeUserData(deleteAudio: Boolean): Int = withContext(Dispatchers.IO) {
+        var removedFiles = 0
+        if (deleteAudio) {
+            dao.allDownloads().forEach { entity ->
+                val file = File(entity.fileName)
+                if (file.exists() && file.delete()) removedFiles++
+            }
+            dao.clearDownloads()
+        }
+        dao.clearPlaylistTracks()
+        dao.clearPlaylists()
+        dao.clearFavorites()
+        dao.clearRecent()
+        downloader.deleteAppAudio(deleteAudio)
+        appContext.cacheDir?.listFiles()?.forEach { it.deleteRecursively() }
+        settings.clearAll()
+        removedFiles
+    }
+
+    suspend fun playlistTracksOnce(id: Long): List<Track> = withContext(Dispatchers.IO) {
+        dao.observePlaylistTracks(id).first().map { it.toTrack() }
+    }
 
     // ---------------- Settings ----------------
     fun setAmoled(enabled: Boolean) = settings.setAmoled(enabled)

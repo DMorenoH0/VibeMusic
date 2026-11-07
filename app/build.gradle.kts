@@ -5,6 +5,17 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+val vibeVersionName = (findProperty("vibeVersionName") as String?) ?: "1.1.0"
+val vibeVersionCode = ((findProperty("vibeVersionCode") as String?) ?: "2").toInt()
+val googleWebClientId = (findProperty("vibeGoogleWebClientId") as String?)
+    ?: System.getenv("VIBE_GOOGLE_WEB_CLIENT_ID")
+    ?: ""
+
+// Optional release signing. The CI workflow decodes a keystore secret into
+// VIBE_KEYSTORE_PATH so consecutive releases keep the same Android signature.
+val releaseKeystorePath = System.getenv("VIBE_KEYSTORE_PATH")
+val hasReleaseKeystore = !releaseKeystorePath.isNullOrBlank() && file(releaseKeystorePath).exists()
+
 android {
     namespace = "com.vibemusic.app"
     compileSdk = 35
@@ -14,16 +25,36 @@ android {
         applicationId = "com.vibemusic.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = vibeVersionCode
+        versionName = vibeVersionName
 
         vectorDrawables.useSupportLibrary = true
+
+        buildConfigField(
+            "String",
+            "GOOGLE_WEB_CLIENT_ID",
+            "\"${googleWebClientId.replace("\"", "\\\"")}\""
+        )
+        buildConfigField("String", "RELEASES_REPO", "\"DMorenoH0/VibeMusic\"")
+    }
+
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = file(releaseKeystorePath!!)
+                storePassword = System.getenv("VIBE_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("VIBE_KEY_ALIAS") ?: "vibemusic"
+                keyPassword = System.getenv("VIBE_KEY_PASSWORD")
+                    ?: System.getenv("VIBE_KEYSTORE_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (hasReleaseKeystore) signingConfig = signingConfigs.getByName("release")
         }
     }
 
@@ -77,5 +108,10 @@ dependencies {
 
     implementation(libs.kotlinx.coroutines.android)
 
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services)
+    implementation(libs.googleid)
+
     testImplementation(libs.junit)
+    testImplementation(libs.org.json)
 }

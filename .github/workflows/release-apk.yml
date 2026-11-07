@@ -27,9 +27,6 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      # setup-android v4 instala solo "platform-tools" por defecto.
-      # v3 intentaba instalar el paquete obsoleto "tools" y fallaba con
-      # "Failed to find package 'tools'" antes de ejecutar cualquier paso nuestro.
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
@@ -40,35 +37,103 @@ jobs:
         run: |
           yes | sdkmanager --licenses > /dev/null || true
           sdkmanager --install "platforms;android-35" "build-tools;36.0.0"
-          echo "Paquetes instalados:"
           sdkmanager --list_installed | grep -E "platforms;android-35|build-tools;36.0.0"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build debug APK
+      - name: Run unit tests
+        run: ./gradlew --no-daemon testDebugUnitTest
+
+      # Builds a release APK signed with the same stable keystore on every run
+      # when the repository secrets are configured. Without secrets it falls
+      # back to a debug APK so the workflow still produces an installable file.
+      - name: Build APK
+        id: build
+        env:
+          VIBE_KEYSTORE_BASE64: ${{ secrets.VIBE_KEYSTORE_BASE64 }}
+          VIBE_KEYSTORE_PASSWORD: ${{ secrets.VIBE_KEYSTORE_PASSWORD }}
+          VIBE_KEY_ALIAS: ${{ secrets.VIBE_KEY_ALIAS }}
+          VIBE_KEY_PASSWORD: ${{ secrets.VIBE_KEY_PASSWORD }}
+          VIBE_GOOGLE_WEB_CLIENT_ID: ${{ secrets.VIBE_GOOGLE_WEB_CLIENT_ID }}
         run: |
           chmod +x ./gradlew
-          ./gradlew --no-daemon assembleDebug
-
-      - name: Prepare APK for release
-        run: |
-          test -f app/build/outputs/apk/debug/app-debug.apk
+          if [ -n "$VIBE_KEYSTORE_BASE64" ]; then
+            echo "$VIBE_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/vibemusic.keystore"
+            export VIBE_KEYSTORE_PATH="$RUNNER_TEMP/vibemusic.keystore"
+            echo "Compilando release firmado con keystore estable."
+            ./gradlew --no-daemon assembleRelease
+            SOURCE="app/build/outputs/apk/release/app-release.apk"
+          else
+            echo "Sin secretos de firma: compilando APK debug."
+            ./gradlew --no-daemon assembleDebug
+            SOURCE="app/build/outputs/apk/debug/app-debug.apk"
+          fi
+          test -f "$SOURCE"
           mkdir -p release
-          cp app/build/outputs/apk/debug/app-debug.apk release/VibeMusic.apk
+          cp "$SOURCE" release/VibeMusic.apk
           ls -l release/VibeMusic.apk
+
+          # El metadato lo escribe AGP junto al APK: así el tag y el nombre de
+          # la release siempre coinciden con la versión realmente compilada.
+          META="$(dirname "$SOURCE")/output-metadata.json"
+          test -f "$META"
+          VERSION=$(jq -r '.elements[0].versionName' "$META")
+          VERSION_CODE=$(jq -r '.elements[0].versionCode' "$META")
+          test -n "$VERSION" && test "$VERSION" != "null"
+          echo "Versión compilada: $VERSION ($VERSION_CODE)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+
+      - name: Compute SHA-256
+        id: hash
+        run: |
+          SHA=$(sha256sum release/VibeMusic.apk | awk '{print $1}')
+          echo "value=$SHA" >> "$GITHUB_OUTPUT"
+          echo "SHA-256: $SHA"
+
+      - name: Verify APK signature
+        run: |
+          APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          if [ -x "${APKSIGNER}.bat" ]; then APKSIGNER="${APKSIGNER}.bat"; fi
+          if [ -x "$APKSIGNER" ]; then
+            "$APKSIGNER" verify --print-certs release/VibeMusic.apk
+          else
+            echo "apksigner no disponible; se omite la comprobación local."
+          fi
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.${{ github.run_number }}
-          name: VibeMusic v1.0.${{ github.run_number }}
+          tag_name: v${{ steps.build.outputs.version }}
+          name: VibeMusic v${{ steps.build.outputs.version }}
           target_commitish: ${{ github.sha }}
           body: |
-            Instalador Android de VibeMusic.
+            Instalador Android de VibeMusic v${{ steps.build.outputs.version }}
+            (versionCode ${{ steps.build.outputs.version_code }}).
 
-            Descarga **VibeMusic.apk** e instálalo en tu dispositivo Android.
-            Esta es una compilación debug generada automáticamente desde el código de este repositorio.
+            **SHA-256 del APK:** `${{ steps.hash.outputs.value }}`
+
+            Descarga **VibeMusic.apk** y ábrelo en tu dispositivo Android.
+            VibeMusic comprueba este hash antes de ofrecer la instalación.
+
+            Novedades:
+            - Buscador con catálogo público de Deezer (vistas previas oficiales de 30 s).
+            - Bibliotecas separadas: dispositivo, descargas e importados.
+            - Importación y exportación de listas en CSV.
+            - Temas visuales: AMOLED, Midnight, Ocean, Purple, Crimson, Emerald y Light.
+            - Comprobación de actualizaciones desde GitHub Releases.
+            - Privacidad: documentos legales y eliminación de datos locales.
+            - Inicio de sesión opcional con Google Identity Services.
+
+            **Firma:** a partir de v1.1.0 se usa un keystore estable, por lo que
+            las próximas actualizaciones serán compatibles entre sí. La versión
+            1.0.2 se firmó con un keystore debug efímero del runner de CI y su
+            clave no se conserva; si vienes de ella, desinstala una vez antes de
+            instalar esta versión.
+
+            El inicio de sesión con Google solo está activo si se define el
+            secreto `VIBE_GOOGLE_WEB_CLIENT_ID`.
           files: release/VibeMusic.apk
           draft: false
           prerelease: false

@@ -4,7 +4,9 @@ enum class TrackSource {
     DEMO,
     LOCAL,
     DOWNLOAD,
-    IMPORTED
+    IMPORTED,
+    /** Streaming preview resolved through a public catalogue API. */
+    ONLINE
 }
 
 /**
@@ -23,7 +25,10 @@ data class Track(
     val source: TrackSource = TrackSource.LOCAL,
     val fileName: String? = null,
     val genre: String? = null,
-    val addedAt: Long = 0L
+    val addedAt: Long = 0L,
+    val albumId: String? = null,
+    val artistId: String? = null,
+    val previewOnly: Boolean = false
 ) {
     val subtitle: String
         get() = when {
@@ -37,6 +42,13 @@ data class Track(
         get() = source == TrackSource.DEMO ||
             source == TrackSource.DOWNLOAD ||
             source == TrackSource.IMPORTED
+
+    /**
+     * Online preview URLs expire and are not backed by a local file, so they are
+     * never written to favourites, playlists or the recent history.
+     */
+    val isPersistable: Boolean
+        get() = source != TrackSource.ONLINE && uri.isNotBlank()
 }
 
 data class PlaylistSummary(

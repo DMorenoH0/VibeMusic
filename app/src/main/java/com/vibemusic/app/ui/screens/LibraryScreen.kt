@@ -33,6 +33,8 @@ import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Smartphone
+import androidx.compose.material.icons.rounded.UploadFile
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -68,8 +70,18 @@ import com.vibemusic.app.ui.theme.VibeMuted
 import com.vibemusic.app.ui.theme.VibeRed
 import com.vibemusic.app.ui.theme.VibeSurface
 import com.vibemusic.app.viewmodel.VibeViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
-private val libraryTabs = listOf("Canciones", "Álbumes", "Listas", "Favoritos", "Descargas")
+private val libraryTabs = listOf(
+    "Dispositivo",
+    "Descargas",
+    "Importados",
+    "Álbumes",
+    "Listas",
+    "Favoritos"
+)
 
 @Composable
 fun LibraryScreen(
@@ -87,10 +99,12 @@ fun LibraryScreen(
     onOpenAppSettings: () -> Unit
 ) {
     val tracks by vm.allTracks.collectAsStateWithLifecycle()
+    val deviceTracks by vm.deviceTracks.collectAsStateWithLifecycle()
+    val downloadedTracks by vm.downloadedTracks.collectAsStateWithLifecycle()
+    val importedTracks by vm.importedTracks.collectAsStateWithLifecycle()
     val favorites by vm.favorites.collectAsStateWithLifecycle()
     val favoriteIds by vm.favoriteIds.collectAsStateWithLifecycle()
     val playlists by vm.playlists.collectAsStateWithLifecycle()
-    val downloads by vm.downloads.collectAsStateWithLifecycle()
     val player by vm.playerState.collectAsStateWithLifecycle()
     val scanState by vm.scanState.collectAsStateWithLifecycle()
     val initializing by vm.initializing.collectAsStateWithLifecycle()
@@ -141,13 +155,13 @@ fun LibraryScreen(
 
             Box(Modifier.weight(1f)) {
                 when (selectedTab) {
-                    0 -> SongsTab(
-                        tracks = tracks,
+                    0 -> DeviceTab(
+                        tracks = deviceTracks,
                         favoriteIds = favoriteIds,
                         currentId = player.mediaId,
                         isPlaying = player.isPlaying,
                         onPlay = { track ->
-                            vm.playFromList(tracks, track)
+                            vm.playFromList(deviceTracks, track)
                             onOpenPlayer()
                         },
                         onFavorite = vm::toggleFavorite,
@@ -157,18 +171,46 @@ fun LibraryScreen(
                         }
                     )
 
-                    1 -> AlbumsTab(
+                    1 -> DownloadTab(
+                        downloads = downloadedTracks,
+                        favoriteIds = favoriteIds,
+                        currentId = player.mediaId,
+                        isPlaying = player.isPlaying,
+                        onPlay = { track ->
+                            vm.playFromList(downloadedTracks, track)
+                            onOpenPlayer()
+                        },
+                        onFavorite = vm::toggleFavorite,
+                        onMore = onTrackMore,
+                        onDownload = onDownload
+                    )
+
+                    2 -> ImportedTab(
+                        tracks = importedTracks,
+                        favoriteIds = favoriteIds,
+                        currentId = player.mediaId,
+                        isPlaying = player.isPlaying,
+                        onPlay = { track ->
+                            vm.playFromList(importedTracks, track)
+                            onOpenPlayer()
+                        },
+                        onFavorite = vm::toggleFavorite,
+                        onMore = onTrackMore,
+                        onImportFiles = onImportFiles
+                    )
+
+                    3 -> AlbumsTab(
                         albums = albums,
                         onOpenAlbum = onOpenAlbum
                     )
 
-                    2 -> PlaylistsTab(
+                    4 -> PlaylistsTab(
                         playlists = playlists,
                         onOpenPlaylist = onOpenPlaylist,
                         onCreatePlaylist = onCreatePlaylist
                     )
 
-                    3 -> FavoritesTab(
+                    else -> FavoritesTab(
                         favorites = favorites,
                         favoriteIds = favoriteIds,
                         currentId = player.mediaId,
@@ -179,20 +221,6 @@ fun LibraryScreen(
                         },
                         onFavorite = vm::toggleFavorite,
                         onMore = onTrackMore
-                    )
-
-                    else -> DownloadsTab(
-                        downloads = downloads,
-                        favoriteIds = favoriteIds,
-                        currentId = player.mediaId,
-                        isPlaying = player.isPlaying,
-                        onPlay = { track ->
-                            vm.playFromList(downloads, track)
-                            onOpenPlayer()
-                        },
-                        onFavorite = vm::toggleFavorite,
-                        onMore = onTrackMore,
-                        onDownload = onDownload
                     )
                 }
             }
@@ -217,7 +245,7 @@ private fun LibraryHeader(
                     color = VibeCream
                 )
                 Text(
-                    "Todo tu audio, en un solo lugar.",
+                    "Dispositivo, descargas e importados por separado.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = VibeMuted
                 )
@@ -242,7 +270,7 @@ private fun LibraryHeader(
             Icon(Icons.Rounded.Search, contentDescription = null, tint = VibeMuted, modifier = Modifier.size(21.dp))
             Spacer(Modifier.width(10.dp))
             Text(
-                "Buscar en tu biblioteca…",
+                "Buscar en tu biblioteca o en el catálogo…",
                 style = MaterialTheme.typography.bodyMedium,
                 color = VibeMuted
             )
@@ -307,7 +335,7 @@ private fun CountLine(text: String) {
 }
 
 @Composable
-private fun SongsTab(
+private fun DeviceTab(
     tracks: List<Track>,
     favoriteIds: Set<String>,
     currentId: String?,
@@ -321,9 +349,9 @@ private fun SongsTab(
         LazyColumn(Modifier.fillMaxSize()) {
             item {
                 EmptyState(
-                    icon = Icons.Rounded.LibraryMusic,
-                    title = "Tu biblioteca está vacía",
-                    message = "Escanea tu música local, importa archivos o usa las muestras originales de VibeMusic.",
+                    icon = Icons.Rounded.Smartphone,
+                    title = "Sin música del dispositivo",
+                    message = "VibeMusic solo muestra aquí las canciones encontradas al escanear el almacenamiento del móvil. Vuelve a escanear para actualizar la lista.",
                     actionLabel = "Escanear ahora",
                     onAction = onRescan
                 )
@@ -335,13 +363,140 @@ private fun SongsTab(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 24.dp)
     ) {
-        item { CountLine("${tracks.size} ${if (tracks.size == 1) "canción en total" else "canciones en total"}") }
+        item {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = 20.dp, end = 12.dp, top = 8.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "${tracks.size} ${if (tracks.size == 1) "canción en el dispositivo" else "canciones en el dispositivo"}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = VibeMuted,
+                    modifier = Modifier.weight(1f)
+                )
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = VibeSurface,
+                    onClick = onRescan
+                ) {
+                    Text(
+                        "Actualizar",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = VibeRed,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
+            }
+        }
         items(tracks, key = { it.id }) { track ->
             TrackRow(
                 track = track,
                 isFavorite = track.id in favoriteIds,
                 isCurrent = currentId == track.id,
                 isPlaying = isPlaying,
+                onClick = { onPlay(track) },
+                onFavorite = { onFavorite(track) },
+                onMore = { onMore(track) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun DownloadTab(
+    downloads: List<Track>,
+    favoriteIds: Set<String>,
+    currentId: String?,
+    isPlaying: Boolean,
+    onPlay: (Track) -> Unit,
+    onFavorite: (Track) -> Unit,
+    onMore: (Track) -> Unit,
+    onDownload: () -> Unit
+) {
+    if (downloads.isEmpty()) {
+        LazyColumn(Modifier.fillMaxSize()) {
+            item {
+                EmptyState(
+                    icon = Icons.Rounded.Download,
+                    title = "Sin música descargada",
+                    message = "Aquí solo aparecen los archivos descargados desde VibeMusic. Eliminar una descarga de la app no borra archivos ajenos a ella.",
+                    actionLabel = "Descargar audio",
+                    onAction = onDownload
+                )
+            }
+        }
+        return
+    }
+    LazyColumn(
+        Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 24.dp)
+    ) {
+        item {
+            CountLine(
+                "${downloads.size} ${if (downloads.size == 1) "descarga de VibeMusic" else "descargas de VibeMusic"}"
+            )
+        }
+        items(downloads, key = { it.id }) { track ->
+            TrackRow(
+                track = track,
+                isFavorite = track.id in favoriteIds,
+                isCurrent = currentId == track.id,
+                isPlaying = isPlaying,
+                caption = when {
+                    track.addedAt > 0L -> "Descargada el ${formatDate(track.addedAt)}"
+                    else -> null
+                },
+                onClick = { onPlay(track) },
+                onFavorite = { onFavorite(track) },
+                onMore = { onMore(track) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ImportedTab(
+    tracks: List<Track>,
+    favoriteIds: Set<String>,
+    currentId: String?,
+    isPlaying: Boolean,
+    onPlay: (Track) -> Unit,
+    onFavorite: (Track) -> Unit,
+    onMore: (Track) -> Unit,
+    onImportFiles: () -> Unit
+) {
+    if (tracks.isEmpty()) {
+        LazyColumn(Modifier.fillMaxSize()) {
+            item {
+                EmptyState(
+                    icon = Icons.Rounded.UploadFile,
+                    title = "Sin archivos importados",
+                    message = "Los audios que importes desde el selector de Android se guardan como copia privada de VibeMusic y aparecen aquí.",
+                    actionLabel = "Importar archivos",
+                    onAction = onImportFiles
+                )
+            }
+        }
+        return
+    }
+    LazyColumn(
+        Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 24.dp)
+    ) {
+        item {
+            CountLine(
+                "${tracks.size} ${if (tracks.size == 1) "archivo importado" else "archivos importados"}"
+            )
+        }
+        items(tracks, key = { it.id }) { track ->
+            TrackRow(
+                track = track,
+                isFavorite = track.id in favoriteIds,
+                isCurrent = currentId == track.id,
+                isPlaying = isPlaying,
+                caption = if (track.addedAt > 0L) "Importado el ${formatDate(track.addedAt)}" else null,
                 onClick = { onPlay(track) },
                 onFavorite = { onFavorite(track) },
                 onMore = { onMore(track) }
@@ -465,46 +620,5 @@ private fun FavoritesTab(
     }
 }
 
-@Composable
-private fun DownloadsTab(
-    downloads: List<Track>,
-    favoriteIds: Set<String>,
-    currentId: String?,
-    isPlaying: Boolean,
-    onPlay: (Track) -> Unit,
-    onFavorite: (Track) -> Unit,
-    onMore: (Track) -> Unit,
-    onDownload: () -> Unit
-) {
-    if (downloads.isEmpty()) {
-        LazyColumn(Modifier.fillMaxSize()) {
-            item {
-                EmptyState(
-                    icon = Icons.Rounded.Download,
-                    title = "Sin descargas",
-                    message = "Descarga un enlace directo o importa archivos para escucharlos sin conexión.",
-                    actionLabel = "Descargar audio",
-                    onAction = onDownload
-                )
-            }
-        }
-        return
-    }
-    LazyColumn(
-        Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 24.dp)
-    ) {
-        item { CountLine("${downloads.size} ${if (downloads.size == 1) "archivo disponible" else "archivos disponibles"} sin conexión") }
-        items(downloads, key = { it.id }) { track ->
-            TrackRow(
-                track = track,
-                isFavorite = track.id in favoriteIds,
-                isCurrent = currentId == track.id,
-                isPlaying = isPlaying,
-                onClick = { onPlay(track) },
-                onFavorite = { onFavorite(track) },
-                onMore = { onMore(track) }
-            )
-        }
-    }
-}
+private fun formatDate(timestamp: Long): String =
+    SimpleDateFormat("d MMM yyyy", Locale.getDefault()).format(Date(timestamp))

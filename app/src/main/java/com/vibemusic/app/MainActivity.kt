@@ -23,8 +23,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            val amoled by vm.amoled.collectAsStateWithLifecycle()
-            VibeMusicTheme(amoled = amoled) {
+            val theme by vm.theme.collectAsStateWithLifecycle()
+            VibeMusicTheme(theme = theme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
