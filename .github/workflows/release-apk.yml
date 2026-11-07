@@ -114,9 +114,10 @@ jobs:
             Instalador Android de VibeMusic v${{ steps.build.outputs.version }}
             (versionCode ${{ steps.build.outputs.version_code }}).
 
-            **SHA-256 del APK:** `${{ steps.hash.outputs.value }}`
+            SHA-256 del APK:
+            ${{ steps.hash.outputs.value }}
 
-            Descarga **VibeMusic.apk** y ábrelo en tu dispositivo Android.
+            Descarga VibeMusic.apk y ábrelo en tu dispositivo Android.
             VibeMusic comprueba este hash antes de ofrecer la instalación.
 
             Novedades:
@@ -128,14 +129,14 @@ jobs:
             - Privacidad: documentos legales y eliminación de datos locales.
             - Inicio de sesión opcional con Google Identity Services.
 
-            **Firma:** a partir de v1.1.0 se usa un keystore estable, por lo que
+            Firma: a partir de v1.1.0 se usa un keystore estable, por lo que
             las próximas actualizaciones serán compatibles entre sí. La versión
             1.0.2 se firmó con un keystore debug efímero del runner de CI y su
             clave no se conserva; si vienes de ella, desinstala una vez antes de
             instalar esta versión.
 
             El inicio de sesión con Google solo está activo si se define el
-            secreto `VIBE_GOOGLE_WEB_CLIENT_ID`.
+            secreto VIBE_GOOGLE_WEB_CLIENT_ID.
           files: release/VibeMusic.apk
           draft: false
           prerelease: false
