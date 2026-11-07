@@ -132,7 +132,9 @@ La versión 1.0.x se instaló en un vivo v40 con Android 16 y sus funciones
 básicas funcionaban. Las funciones nuevas de la versión 1.1.0 se han probado en
 un emulador API 37: buscador online, álbum y artista, reproducción de vistas
 previas, CSV, temas, actualización manual, borrado de datos y reproducción
-local con notificación y cola.
+local con notificación y cola. También se probó el ciclo completo de
+actualización: una build 1.0.9 detectó la 1.1.0 publicada, descargó el APK,
+verificó su SHA-256 y se actualizó con el diálogo oficial de Android.
 
 ## Limitaciones
 
