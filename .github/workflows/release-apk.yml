@@ -43,7 +43,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Run unit tests
-        run: ./gradlew --no-daemon testDebugUnitTest
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon testDebugUnitTest
 
       # Builds a release APK signed with the same stable keystore on every run
       # when the repository secrets are configured. Without secrets it falls
