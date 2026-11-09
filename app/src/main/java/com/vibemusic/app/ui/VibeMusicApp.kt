@@ -33,6 +33,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vibemusic.app.data.model.Track
 import com.vibemusic.app.data.model.TrackSource
+import com.vibemusic.app.data.youtube.YouTubeVideo
 import com.vibemusic.app.ui.components.MiniPlayer
 import com.vibemusic.app.ui.components.UpdateBanner
 import com.vibemusic.app.ui.components.UpdateDialog
@@ -54,12 +55,15 @@ import com.vibemusic.app.ui.screens.OnlineArtistScreen
 import com.vibemusic.app.ui.screens.PlaylistDetailScreen
 import com.vibemusic.app.ui.screens.QueueScreen
 import com.vibemusic.app.ui.screens.SearchScreen
+import com.vibemusic.app.ui.screens.SamplesScreen
 import com.vibemusic.app.ui.screens.SettingsScreen
+import com.vibemusic.app.ui.screens.YouTubeScreen
 import com.vibemusic.app.viewmodel.VibeViewModel
 
 /**
- * Root composable. The main shell has four tabs (Inicio, Buscar, Explorar and
- * Biblioteca) and every detail view is a full-screen overlay on top of it.
+ * Root composable. The main shell has five tabs (Inicio, Buscar, Explorar,
+ * Biblioteca and YouTube) and every detail view is a full-screen overlay on
+ * top of it.
  */
 @Composable
 fun VibeMusicApp(vm: VibeViewModel) {
@@ -93,6 +97,28 @@ fun VibeMusicApp(vm: VibeViewModel) {
                 Intent(Intent.ACTION_VIEW, Uri.parse(url))
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
+        }
+    }
+
+    // Playback is delegated to the official YouTube app (or website). VibeMusic
+    // never extracts audio, so ads and playback restrictions always apply.
+    val openYouTube: (YouTubeVideo) -> Unit = { video ->
+        val openedInApp = runCatching {
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse(video.appUri))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }.isSuccess
+        if (!openedInApp) {
+            val openedInBrowser = runCatching {
+                context.startActivity(
+                    Intent(Intent.ACTION_VIEW, Uri.parse(video.watchUrl))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            }.isSuccess
+            if (!openedInBrowser) {
+                vm.notify("No se encontró el reproductor oficial de YouTube.")
+            }
         }
     }
 
@@ -165,7 +191,7 @@ fun VibeMusicApp(vm: VibeViewModel) {
                 when (tab) {
                     0 -> HomeScreen(
                         vm = vm,
-                        onOpenSearch = { tab = 1 },
+                        onOpenSearch = { route = "search" },
                         onOpenSettings = { route = "settings" },
                         onOpenPlayer = { route = "player" },
                         onOpenAlbum = { album -> route = "album:$album" },
@@ -173,22 +199,15 @@ fun VibeMusicApp(vm: VibeViewModel) {
                         onOpenAppSettings = openAppSettings
                     )
 
-                    1 -> SearchScreen(
+                    1 -> SamplesScreen(
                         vm = vm,
-                        onBack = null,
-                        onOpenPlayer = { route = "player" },
-                        onOpenAlbum = { album -> route = "album:$album" },
-                        onTrackMore = { track ->
-                            actionPlaylistId = null
-                            actionTrack = track
-                        },
-                        onOpenOnlineAlbum = { id -> route = "onlineAlbum:$id" },
-                        onOpenOnlineArtist = { id -> route = "onlineArtist:$id" }
+                        onOpenPlayer = { route = "player" }
                     )
 
                     2 -> ExploreScreen(
                         vm = vm,
-                        onOpenSearch = { tab = 1 },
+                        onOpenSearch = { route = "search" },
+                        onOpenYouTube = { route = "youtube" },
                         onOpenAlbum = { album -> route = "album:$album" },
                         onOpenPlayer = { route = "player" },
                         onRequestPermission = requestAudioPermission,
@@ -204,7 +223,7 @@ fun VibeMusicApp(vm: VibeViewModel) {
                         },
                         onOpenAlbum = { album -> route = "album:$album" },
                         onOpenPlaylist = { id -> route = "playlist:$id" },
-                        onOpenSearch = { tab = 1 },
+                        onOpenSearch = { route = "search" },
                         onOpenSettings = { route = "settings" },
                         onImportFiles = { importLauncher.launch(arrayOf("audio/*")) },
                         onCreatePlaylist = {
@@ -263,6 +282,30 @@ fun VibeMusicApp(vm: VibeViewModel) {
                     vm = vm,
                     onBack = { route = null },
                     onOpenPlayer = { route = "player" }
+                )
+            }
+
+            route == "search" -> Box(overlayModifier) {
+                SearchScreen(
+                    vm = vm,
+                    onBack = { route = null },
+                    autoFocus = true,
+                    onOpenPlayer = { route = "player" },
+                    onOpenAlbum = { album -> route = "album:$album" },
+                    onTrackMore = { track ->
+                        actionPlaylistId = null
+                        actionTrack = track
+                    },
+                    onOpenOnlineAlbum = { id -> route = "onlineAlbum:$id" },
+                    onOpenOnlineArtist = { id -> route = "onlineArtist:$id" }
+                )
+            }
+
+            route == "youtube" -> Box(overlayModifier) {
+                YouTubeScreen(
+                    vm = vm,
+                    onPlayVideo = openYouTube,
+                    onBack = { route = null }
                 )
             }
 

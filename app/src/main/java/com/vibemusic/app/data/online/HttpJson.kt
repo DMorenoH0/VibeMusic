@@ -12,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object HttpJson {
 
-    private const val USER_AGENT = "VibeMusic/1.1 (Android; open-source music player)"
+    private const val USER_AGENT = "VibeMusic/1.2 (Android; open-source music player)"
 
     @Throws(IOException::class)
     fun get(url: String, timeoutMs: Int = 12_000): String {
@@ -20,6 +20,12 @@ object HttpJson {
         repeat(2) { attempt ->
             try {
                 return request(url, timeoutMs)
+            } catch (e: HttpStatusException) {
+                // 4xx means the request itself is wrong (invalid key, quota,
+                // bad query). Retrying would waste quota and never succeed.
+                if (e.statusCode in 400..499) throw e
+                lastError = e
+                if (attempt == 0) Thread.sleep(350)
             } catch (e: IOException) {
                 lastError = e
                 if (attempt == 0) Thread.sleep(350)
@@ -45,7 +51,7 @@ object HttpJson {
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
             val body = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
             if (code !in 200..299) {
-                throw IOException("El servidor respondió HTTP $code.")
+                throw HttpStatusException(code, body)
             }
             if (body.isBlank()) throw IOException("El servidor devolvió una respuesta vacía.")
             return body
@@ -54,6 +60,12 @@ object HttpJson {
         }
     }
 }
+
+/** Non-2xx response. Keeps the body so callers can read API error reasons. */
+class HttpStatusException(
+    val statusCode: Int,
+    val responseBody: String
+) : IOException("El servidor respondió HTTP $statusCode.")
 
 /** Tiny size-bounded cache so repeated queries do not burn API quota. */
 class ResponseCache<T : Any>(private val capacity: Int = 48) {

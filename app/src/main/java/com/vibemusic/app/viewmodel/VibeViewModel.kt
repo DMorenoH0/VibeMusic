@@ -34,6 +34,9 @@ import com.vibemusic.app.data.update.UpdateDownloadState
 import com.vibemusic.app.data.update.UpdateException
 import com.vibemusic.app.data.update.UpdateInstaller
 import com.vibemusic.app.data.update.isNewerVersion
+import com.vibemusic.app.data.youtube.YouTubeException
+import com.vibemusic.app.data.youtube.YouTubeService
+import com.vibemusic.app.data.youtube.YouTubeVideo
 import com.vibemusic.app.playback.PlayerController
 import com.vibemusic.app.playback.PlayerUiState
 import com.vibemusic.app.playback.QueueItem
@@ -82,6 +85,15 @@ data class OnlineArtistState(
     val loading: Boolean = false,
     val artist: OnlineArtist? = null,
     val error: String? = null
+)
+
+data class YouTubeSearchState(
+    val query: String = "",
+    val loading: Boolean = false,
+    val results: List<YouTubeVideo> = emptyList(),
+    val error: String? = null,
+    val searched: Boolean = false,
+    val configured: Boolean = false
 )
 
 data class UpdateUiState(
@@ -231,6 +243,18 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _onlineArtist = MutableStateFlow(OnlineArtistState())
     val onlineArtist: StateFlow<OnlineArtistState> = _onlineArtist.asStateFlow()
+
+    private val youTube = YouTubeService(BuildConfig.YOUTUBE_API_KEY)
+    private val _youtubeQuery = MutableStateFlow("")
+    val youtubeQuery: StateFlow<String> = _youtubeQuery.asStateFlow()
+    private val _youtubeSearch = MutableStateFlow(
+        YouTubeSearchState(configured = youTube.isConfigured)
+    )
+    val youtubeSearch: StateFlow<YouTubeSearchState> = _youtubeSearch.asStateFlow()
+    private var youtubeSearchJob: Job? = null
+    private var lastYouTubeQuery = ""
+
+    val youtubeConfigured: Boolean get() = youTube.isConfigured
 
     private val _update = MutableStateFlow(UpdateUiState())
     val update: StateFlow<UpdateUiState> = _update.asStateFlow()
@@ -487,6 +511,86 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun retryOnlineSearch() {
         submitSearch(_onlineSearch.value.query.ifBlank { _searchQuery.value })
+    }
+
+    // ---------------- YouTube ----------------
+    fun setYouTubeQuery(query: String) {
+        _youtubeQuery.value = query
+        if (query.isBlank()) {
+            youtubeSearchJob?.cancel()
+            _youtubeSearch.value = YouTubeSearchState(configured = youTube.isConfigured)
+            lastYouTubeQuery = ""
+        }
+    }
+
+    /**
+     * YouTube searches are only sent when the user explicitly submits them.
+     * Typing never spends quota; a query is cached after the first success.
+     */
+    fun submitYouTubeSearch(query: String = _youtubeQuery.value) {
+        val clean = query.trim()
+        _youtubeQuery.value = clean
+        if (clean.length < 2) {
+            youtubeSearchJob?.cancel()
+            _youtubeSearch.value = YouTubeSearchState(
+                query = clean,
+                configured = youTube.isConfigured
+            )
+            return
+        }
+        youtubeSearchJob?.cancel()
+        youtubeSearchJob = viewModelScope.launch { runYouTubeSearch(clean) }
+    }
+
+    fun clearYouTubeSearch() {
+        youtubeSearchJob?.cancel()
+        _youtubeQuery.value = ""
+        _youtubeSearch.value = YouTubeSearchState(configured = youTube.isConfigured)
+        lastYouTubeQuery = ""
+    }
+
+    fun retryYouTubeSearch() {
+        submitYouTubeSearch(_youtubeSearch.value.query.ifBlank { _youtubeQuery.value })
+    }
+
+    private suspend fun runYouTubeSearch(query: String) {
+        if (lastYouTubeQuery == query && _youtubeSearch.value.searched &&
+            _youtubeSearch.value.error == null
+        ) {
+            return
+        }
+        lastYouTubeQuery = query
+        _youtubeSearch.value = YouTubeSearchState(
+            query = query,
+            loading = true,
+            configured = youTube.isConfigured
+        )
+        try {
+            val results = youTube.search(query)
+            _youtubeSearch.value = YouTubeSearchState(
+                query = query,
+                loading = false,
+                results = results,
+                searched = true,
+                configured = true
+            )
+        } catch (e: YouTubeException) {
+            _youtubeSearch.value = YouTubeSearchState(
+                query = query,
+                loading = false,
+                error = e.message ?: "No se pudo buscar en YouTube.",
+                searched = true,
+                configured = youTube.isConfigured
+            )
+        } catch (e: Exception) {
+            _youtubeSearch.value = YouTubeSearchState(
+                query = query,
+                loading = false,
+                error = "Sin conexión o YouTube no responde. Tu música local sigue disponible.",
+                searched = true,
+                configured = youTube.isConfigured
+            )
+        }
     }
 
     fun loadOnlineAlbum(albumId: String) {
@@ -982,6 +1086,11 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 _csvImport.value = CsvImportState()
                 _onlineSearch.value = OnlineSearchState()
                 _searchQuery.value = ""
+                youtubeSearchJob?.cancel()
+                youTube.clearCache()
+                _youtubeQuery.value = ""
+                _youtubeSearch.value = YouTubeSearchState(configured = youTube.isConfigured)
+                lastYouTubeQuery = ""
                 _update.value = UpdateUiState(installPermission = installer.canRequestInstall())
                 _auth.value = AuthUiState()
                 notify(
@@ -1016,6 +1125,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         super.onCleared()
         sleepJob?.cancel()
         onlineSearchJob?.cancel()
+        youtubeSearchJob?.cancel()
         updateDownloadJob?.cancel()
     }
 }

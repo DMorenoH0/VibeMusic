@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -5,10 +7,25 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
-val vibeVersionName = (findProperty("vibeVersionName") as String?) ?: "1.1.0"
-val vibeVersionCode = ((findProperty("vibeVersionCode") as String?) ?: "2").toInt()
+val vibeVersionName = (findProperty("vibeVersionName") as String?) ?: "1.2.0"
+val vibeVersionCode = ((findProperty("vibeVersionCode") as String?) ?: "3").toInt()
 val googleWebClientId = (findProperty("vibeGoogleWebClientId") as String?)
     ?: System.getenv("VIBE_GOOGLE_WEB_CLIENT_ID")
+    ?: ""
+
+// YouTube Data API v3 key. It is injected from a GitHub Actions secret, an
+// environment variable or the git-ignored local.properties, never committed.
+fun localProperty(name: String): String? {
+    val file = rootProject.file("local.properties")
+    if (!file.exists()) return null
+    val properties = Properties()
+    file.inputStream().use { properties.load(it) }
+    return properties.getProperty(name)
+}
+
+val youtubeApiKey = (findProperty("vibeYouTubeApiKey") as String?)
+    ?: System.getenv("VIBE_YOUTUBE_API_KEY")
+    ?: localProperty("VIBE_YOUTUBE_API_KEY")
     ?: ""
 
 // Optional release signing. The CI workflow decodes a keystore secret into
@@ -34,6 +51,11 @@ android {
             "String",
             "GOOGLE_WEB_CLIENT_ID",
             "\"${googleWebClientId.replace("\"", "\\\"")}\""
+        )
+        buildConfigField(
+            "String",
+            "YOUTUBE_API_KEY",
+            "\"${youtubeApiKey.replace("\"", "\\\"")}\""
         )
         buildConfigField("String", "RELEASES_REPO", "\"DMorenoH0/VibeMusic\"")
     }

@@ -12,6 +12,19 @@ fun formatDuration(durationMs: Long): String {
     return "%d:%02d".format(minutes, seconds)
 }
 
+fun formatVideoDuration(durationMs: Long): String {
+    if (durationMs <= 0) return ""
+    val totalSeconds = TimeUnit.MILLISECONDS.toSeconds(durationMs)
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val seconds = totalSeconds % 60
+    return if (hours > 0) {
+        "%d:%02d:%02d".format(hours, minutes, seconds)
+    } else {
+        "%d:%02d".format(minutes, seconds)
+    }
+}
+
 fun formatLongDuration(durationMs: Long): String {
     val totalMinutes = TimeUnit.MILLISECONDS.toMinutes(durationMs)
     val hours = totalMinutes / 60

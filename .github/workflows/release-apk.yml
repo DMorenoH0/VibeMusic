@@ -58,6 +58,7 @@ jobs:
           VIBE_KEY_ALIAS: ${{ secrets.VIBE_KEY_ALIAS }}
           VIBE_KEY_PASSWORD: ${{ secrets.VIBE_KEY_PASSWORD }}
           VIBE_GOOGLE_WEB_CLIENT_ID: ${{ secrets.VIBE_GOOGLE_WEB_CLIENT_ID }}
+          VIBE_YOUTUBE_API_KEY: ${{ secrets.VIBE_YOUTUBE_API_KEY }}
         run: |
           chmod +x ./gradlew
           if [ -n "$VIBE_KEYSTORE_BASE64" ]; then
@@ -121,6 +122,12 @@ jobs:
             VibeMusic comprueba este hash antes de ofrecer la instalación.
 
             Novedades:
+            - Nueva barra inferior de cuatro apartados: Home, Samples, Explore y Library.
+            - Pestaña Samples con las instrumentales originales incluidas y reproducción completa.
+            - Sección YouTube accesible desde Explore, con búsqueda por título, artista o álbum.
+            - Resultados con miniatura, canal y duración mediante YouTube Data API v3.
+            - Reproducción delegada al reproductor oficial de YouTube, sin extraer audio.
+            - La búsqueda solo se ejecuta al pulsarla y se cachea para ahorrar cuota.
             - Buscador con catálogo público de Deezer (vistas previas oficiales de 30 s).
             - Bibliotecas separadas: dispositivo, descargas e importados.
             - Importación y exportación de listas en CSV.
@@ -129,14 +136,14 @@ jobs:
             - Privacidad: documentos legales y eliminación de datos locales.
             - Inicio de sesión opcional con Google Identity Services.
 
-            Firma: a partir de v1.1.0 se usa un keystore estable, por lo que
-            las próximas actualizaciones serán compatibles entre sí. La versión
-            1.0.2 se firmó con un keystore debug efímero del runner de CI y su
-            clave no se conserva; si vienes de ella, desinstala una vez antes de
-            instalar esta versión.
+            Firma: esta versión usa el mismo keystore estable que v1.1.0, por lo
+            que se instala como actualización normal. La versión 1.0.2 se firmó
+            con un keystore debug efímero del runner de CI y su clave no se
+            conserva; si vienes de ella, desinstala una vez antes de instalar.
 
-            El inicio de sesión con Google solo está activo si se define el
-            secreto VIBE_GOOGLE_WEB_CLIENT_ID.
+            La búsqueda de YouTube requiere configurar el secreto
+            VIBE_YOUTUBE_API_KEY. El inicio de sesión con Google solo está activo
+            si se define el secreto VIBE_GOOGLE_WEB_CLIENT_ID.
           files: release/VibeMusic.apk
           draft: false
           prerelease: false

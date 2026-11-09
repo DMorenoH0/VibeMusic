@@ -47,6 +47,7 @@ import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.UploadFile
+import androidx.compose.material.icons.rounded.SmartDisplay
 import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
@@ -493,6 +494,58 @@ fun SettingsScreen(
                 }
             }
 
+            // ---------------- YouTube ----------------
+            item { SectionHeader("YouTube") }
+            item {
+                SettingsCard {
+                    Row(
+                        Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Rounded.SmartDisplay,
+                            contentDescription = null,
+                            tint = VibeRed,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                if (vm.youtubeConfigured) {
+                                    "YouTube Data API conectada"
+                                } else {
+                                    "YouTube sin configurar"
+                                },
+                                style = MaterialTheme.typography.titleMedium,
+                                color = VibeCream
+                            )
+                            Text(
+                                if (vm.youtubeConfigured) {
+                                    "El buscador usa la API oficial. Los vídeos se reproducen en el reproductor oficial de YouTube."
+                                } else {
+                                    "Falta la clave VIBE_YOUTUBE_API_KEY. La sección YouTube no envía consultas hasta configurarla."
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = VibeMuted
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = if (vm.youtubeConfigured) VibeRed.copy(alpha = 0.16f)
+                            else VibeSurfaceHigh
+                        ) {
+                            Text(
+                                if (vm.youtubeConfigured) "Activa" else "Pendiente",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (vm.youtubeConfigured) VibeRed else VibeMuted,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
             // ---------------- CSV ----------------
             item { SectionHeader("Importar y exportar") }
             item {
@@ -652,7 +705,7 @@ fun SettingsScreen(
                     }
                     HorizontalDivider(color = VibeLine.copy(alpha = 0.6f))
                     Text(
-                        "Reproductor local con buscador de catálogo, bibliotecas separadas, CSV, temas y actualizaciones verificadas. Las muestras incluidas son instrumentales originales generadas para esta app. No se ofrece un catálogo comercial ilimitado.",
+                        "Reproductor local con buscador de catálogo, sección YouTube, bibliotecas separadas, CSV, temas y actualizaciones verificadas. Los vídeos de YouTube se reproducen en el reproductor oficial. Las muestras incluidas son instrumentales originales generadas para esta app.",
                         style = MaterialTheme.typography.bodySmall,
                         color = VibeMuted,
                         modifier = Modifier.padding(16.dp)
@@ -717,7 +770,7 @@ fun SettingsScreen(
                     )
                     WipeBullet("Tus archivos musicales originales del dispositivo.")
                     WipeBullet("Tu cuenta de Google ni los datos que Google conserva. Para borrarlos, usa tu cuenta de Google o cierra sesión antes.")
-                    WipeBullet("Datos de Deezer o GitHub: no tienes una cuenta de VibeMusic en esos servicios.")
+                    WipeBullet("Datos de Deezer, YouTube o GitHub: no tienes una cuenta de VibeMusic en esos servicios.")
                     Spacer(Modifier.height(4.dp))
                     Row(
                         Modifier.fillMaxWidth().clickable { wipeAudio = !wipeAudio },

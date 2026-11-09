@@ -1,8 +1,7 @@
-package com.vibemusic.app.ui.screens
+﻿package com.vibemusic.app.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -20,41 +19,33 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.SmartDisplay
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.vibemusic.app.data.model.Track
-import com.vibemusic.app.data.model.TrackSource
-import com.vibemusic.app.ui.AlbumGroup
 import com.vibemusic.app.ui.ArtistGroup
 import com.vibemusic.app.ui.components.AlbumArt
 import com.vibemusic.app.ui.components.AlbumCard
-import com.vibemusic.app.ui.components.MixCard
 import com.vibemusic.app.ui.components.PermissionBanner
 import com.vibemusic.app.ui.components.SectionHeader
 import com.vibemusic.app.ui.groupAlbums
 import com.vibemusic.app.ui.groupArtists
 import com.vibemusic.app.ui.theme.VibeCream
-import com.vibemusic.app.ui.theme.VibeLine
 import com.vibemusic.app.ui.theme.VibeMuted
 import com.vibemusic.app.ui.theme.VibeRed
 import com.vibemusic.app.ui.theme.VibeSurface
@@ -64,6 +55,7 @@ import com.vibemusic.app.viewmodel.VibeViewModel
 fun ExploreScreen(
     vm: VibeViewModel,
     onOpenSearch: () -> Unit,
+    onOpenYouTube: () -> Unit,
     onOpenAlbum: (String) -> Unit,
     onOpenPlayer: () -> Unit,
     onRequestPermission: () -> Unit,
@@ -71,15 +63,8 @@ fun ExploreScreen(
 ) {
     val tracks by vm.allTracks.collectAsStateWithLifecycle()
     val scanState by vm.scanState.collectAsStateWithLifecycle()
-    val demos = remember(tracks) { tracks.filter { it.source == TrackSource.DEMO } }
     val albums = remember(tracks) { groupAlbums(tracks) }
     val artists = remember(tracks) { groupArtists(tracks) }
-    val genres = remember(demos) { listOf("Todo") + demos.map { it.genre ?: "Otros" }.distinct() }
-    var selectedGenre by rememberSaveable { mutableStateOf("Todo") }
-
-    val filteredDemos = remember(demos, selectedGenre) {
-        if (selectedGenre == "Todo") demos else demos.filter { it.genre == selectedGenre }
-    }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val columns = when {
@@ -99,14 +84,16 @@ fun ExploreScreen(
                 item {
                     Column(Modifier.padding(horizontal = 20.dp)) {
                         Spacer(Modifier.height(8.dp))
-                        Text("Explorar", style = MaterialTheme.typography.headlineLarge, color = VibeCream)
+                        Text("Explore", style = MaterialTheme.typography.headlineLarge, color = VibeCream)
                         Text(
-                            "Muestras originales y todo lo que hay en tu móvil.",
+                            "Busca en el catálogo y descubre música online.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = VibeMuted
                         )
                         Spacer(Modifier.height(14.dp))
                         SearchBarButton(onClick = onOpenSearch)
+                        Spacer(Modifier.height(12.dp))
+                        YouTubeEntryCard(onClick = onOpenYouTube)
                     }
                 }
 
@@ -116,55 +103,6 @@ fun ExploreScreen(
                         onRequestPermission = onRequestPermission,
                         onOpenSettings = onOpenAppSettings
                     )
-                }
-
-                item {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 20.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        genres.forEach { genre ->
-                            GenreChip(
-                                label = genre,
-                                selected = genre == selectedGenre,
-                                onClick = { selectedGenre = genre }
-                            )
-                        }
-                    }
-                }
-
-                if (filteredDemos.isNotEmpty()) {
-                    item { SectionHeader("Muestras VibeMusic") }
-                    item {
-                        LazyRow(
-                            contentPadding = PaddingValues(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            items(filteredDemos, key = { it.id }) { track ->
-                                MixCard(
-                                    track = track,
-                                    title = track.title,
-                                    subtitle = "${track.artist} · ${track.genre ?: "Original"}",
-                                    onClick = {
-                                        vm.playFromList(filteredDemos, track)
-                                        onOpenPlayer()
-                                    }
-                                )
-                            }
-                        }
-                    }
-                } else {
-                    item {
-                        Text(
-                            "No hay muestras para este género.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = VibeMuted,
-                            modifier = Modifier.padding(20.dp)
-                        )
-                    }
                 }
 
                 item { SectionHeader("Álbumes") }
@@ -204,7 +142,8 @@ fun ExploreScreen(
                 item {
                     Column(Modifier.padding(20.dp)) {
                         Text(
-                            "Las muestras de VibeMusic son instrumentales originales generadas para esta app. No hay catálogo comercial ni extracción desde YouTube.",
+                            "La búsqueda online usa el catálogo público de Deezer con vistas previas de 30 s. " +
+                                "Los vídeos de la sección YouTube se abren en su reproductor oficial, sin extraer audio.",
                             style = MaterialTheme.typography.bodySmall,
                             color = VibeMuted
                         )
@@ -212,6 +151,53 @@ fun ExploreScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun YouTubeEntryCard(onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(VibeSurface)
+            .clickable(onClick = onClick)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier
+                .size(38.dp)
+                .background(VibeRed, RoundedCornerShape(10.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Rounded.SmartDisplay,
+                contentDescription = null,
+                tint = androidx.compose.ui.graphics.Color.White,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                "YouTube",
+                style = MaterialTheme.typography.titleSmall,
+                color = VibeCream,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                "Busca vídeos y reproduce en el reproductor oficial.",
+                style = MaterialTheme.typography.bodySmall,
+                color = VibeMuted
+            )
+        }
+        Icon(
+            Icons.Rounded.ChevronRight,
+            contentDescription = null,
+            tint = VibeMuted,
+            modifier = Modifier.size(20.dp)
+        )
     }
 }
 
@@ -232,22 +218,6 @@ private fun SearchBarButton(onClick: () -> Unit) {
             "Buscar canciones, artistas, álbumes...",
             style = MaterialTheme.typography.bodyMedium,
             color = VibeMuted
-        )
-    }
-}
-
-@Composable
-private fun GenreChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    Surface(
-        shape = RoundedCornerShape(50),
-        color = if (selected) VibeRed else VibeSurface,
-        modifier = Modifier.clickable(onClick = onClick)
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            color = if (selected) VibeCream else VibeMuted,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
         )
     }
 }
