@@ -3,6 +3,41 @@
 Todas las versiones publicadas de VibeMusic. El formato sigue la idea de
 «Keep a Changelog» y las versiones usan SemVer.
 
+## [1.2.1] - 11 de noviembre de 2026
+
+### Añadido
+
+- Reproductor oficial de YouTube **dentro de VibeMusic**: al pulsar un
+  resultado se abre una pantalla propia con la IFrame Player API en un WebView.
+  Ya no se lanza `vnd.youtube:` ni el navegador.
+- Pantalla `YouTubePlayerScreen` con fondo oscuro, reproductor 16:9 arriba,
+  título, canal, duración, fecha, descripción, aviso legal y botón «Volver a
+  los resultados».
+- HTML auditable en `assets/youtube_player.html` con `playsinline`, autoplay y
+  el tamaño real del WebView; sin extracción de audio ni bloqueo de anuncios.
+- Mensajes en español para vídeos privados, eliminados, con inserción
+  desactivada, errores del reproductor y falta de respuesta (incluye códigos
+  100, 101, 150, 152, 153, -1 y -2).
+- Vigilancia nativa del estado del reproductor: si YouTube deja el vídeo en
+  «sin iniciar» o no responde, la app reemplaza el reproductor por una
+  explicación en lugar de dejar un marco negro.
+
+### Cambiado
+
+- Los resultados de YouTube muestran «Reproducir en VibeMusic» y el texto de la
+  sección explica que la reproducción es interna.
+- El vídeo seleccionado se conserva al rotar o recrear la actividad mediante
+  `rememberSaveable`; atrás vuelve a los resultados sin perder la búsqueda.
+- Al abrir el reproductor de YouTube se pausa Media3 si estaba sonando, para no
+  solapar dos fuentes de audio. La reproducción local no cambia.
+
+### Corregido
+
+- El iframe del reproductor ya no se queda con altura 0 (se fija al tamaño real
+  del WebView), por lo que el vídeo y sus controles son visibles.
+- El reproductor ya no se carga con un origen de YouTube que provocaba el error
+  152-4; ahora usa `https://com.vibemusic.app` como origen y base del HTML.
+
 ## [1.2.0] - 9 de noviembre de 2026
 
 ### Añadido

@@ -7,8 +7,8 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
-val vibeVersionName = (findProperty("vibeVersionName") as String?) ?: "1.2.0"
-val vibeVersionCode = ((findProperty("vibeVersionCode") as String?) ?: "3").toInt()
+val vibeVersionName = (findProperty("vibeVersionName") as String?) ?: "1.2.1"
+val vibeVersionCode = ((findProperty("vibeVersionCode") as String?) ?: "4").toInt()
 val googleWebClientId = (findProperty("vibeGoogleWebClientId") as String?)
     ?: System.getenv("VIBE_GOOGLE_WEB_CLIENT_ID")
     ?: ""

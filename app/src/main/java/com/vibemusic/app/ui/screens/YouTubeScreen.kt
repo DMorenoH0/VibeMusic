@@ -23,7 +23,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Info
-import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SmartDisplay
@@ -60,9 +59,9 @@ import com.vibemusic.app.ui.theme.VibeSurface
 import com.vibemusic.app.viewmodel.VibeViewModel
 
 /**
- * Independent YouTube section. It only searches metadata through the official
- * Data API; playback is delegated to the official YouTube player, so ads and
- * playback restrictions are never bypassed.
+ * YouTube section. It only searches metadata through the official Data API;
+ * playback opens the official embedded player inside VibeMusic, so ads,
+ * branding and playback restrictions are never bypassed.
  */
 @Composable
 fun YouTubeScreen(
@@ -120,7 +119,7 @@ fun YouTubeScreen(
                             color = VibeCream
                         )
                         Text(
-                            "Busca y reproduce en el reproductor oficial.",
+                            "Busca y reproduce dentro de VibeMusic con el reproductor oficial.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = VibeMuted
                         )
@@ -232,7 +231,7 @@ fun YouTubeScreen(
                             if (state.results.isNotEmpty()) {
                                 item {
                                     Text(
-                                        "${state.results.size} resultados · reproductor oficial",
+                                        "${state.results.size} resultados · reproductor integrado",
                                         style = MaterialTheme.typography.labelMedium,
                                         color = VibeMuted,
                                         modifier = Modifier.padding(
@@ -290,7 +289,7 @@ private fun YouTubeResultRow(video: YouTubeVideo, onClick: () -> Unit) {
                 ) {
                     Icon(
                         Icons.Rounded.PlayArrow,
-                        contentDescription = "Reproducir en YouTube",
+                        contentDescription = "Reproducir dentro de VibeMusic",
                         tint = androidx.compose.ui.graphics.Color.White,
                         modifier = Modifier.size(22.dp)
                     )
@@ -333,14 +332,14 @@ private fun YouTubeResultRow(video: YouTubeVideo, onClick: () -> Unit) {
                 Spacer(Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        Icons.Rounded.OpenInNew,
+                        Icons.Rounded.PlayArrow,
                         contentDescription = null,
                         tint = VibeRed,
                         modifier = Modifier.size(13.dp)
                     )
                     Spacer(Modifier.width(4.dp))
                     Text(
-                        "Abrir en YouTube",
+                        "Reproducir en VibeMusic",
                         style = MaterialTheme.typography.labelSmall,
                         color = VibeRed
                     )
@@ -376,7 +375,7 @@ private fun YouTubeIntroCard() {
         Spacer(Modifier.height(10.dp))
         YouTubeBullet("Busca por título, artista o álbum y pulsa Buscar. La consulta solo se envía cuando tú lo pides.")
         YouTubeBullet("Los resultados muestran miniatura, canal y duración mediante YouTube Data API v3.")
-        YouTubeBullet("Al pulsar un vídeo se abre el reproductor oficial de YouTube, con sus anuncios, controles y restricciones.")
+        YouTubeBullet("Al pulsar un vídeo se abre el reproductor oficial integrado en VibeMusic, con sus anuncios, controles y restricciones.")
         YouTubeBullet("VibeMusic no extrae audio, no descarga vídeos y no reproduce YouTube en segundo plano.")
         Spacer(Modifier.height(8.dp))
         Text(
@@ -446,7 +445,7 @@ private fun YouTubePlaybackNote() {
         )
         Spacer(Modifier.width(10.dp))
         Text(
-            "La reproducción se abre en el reproductor oficial de YouTube. No se extrae audio ni se evitan anuncios o restricciones.",
+            "La reproducción usa el reproductor oficial de YouTube integrado en VibeMusic. No se extrae audio ni se evitan anuncios o restricciones.",
             style = MaterialTheme.typography.labelSmall,
             color = VibeMuted
         )

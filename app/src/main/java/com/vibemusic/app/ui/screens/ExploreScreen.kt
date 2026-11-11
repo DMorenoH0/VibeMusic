@@ -143,7 +143,7 @@ fun ExploreScreen(
                     Column(Modifier.padding(20.dp)) {
                         Text(
                             "La búsqueda online usa el catálogo público de Deezer con vistas previas de 30 s. " +
-                                "Los vídeos de la sección YouTube se abren en su reproductor oficial, sin extraer audio.",
+                                "Los vídeos de la sección YouTube se reproducen con el reproductor oficial integrado, sin extraer audio.",
                             style = MaterialTheme.typography.bodySmall,
                             color = VibeMuted
                         )
@@ -187,7 +187,7 @@ private fun YouTubeEntryCard(onClick: () -> Unit) {
                 fontWeight = FontWeight.SemiBold
             )
             Text(
-                "Busca vídeos y reproduce en el reproductor oficial.",
+                "Busca vídeos y reprodúcelos dentro de VibeMusic.",
                 style = MaterialTheme.typography.bodySmall,
                 color = VibeMuted
             )

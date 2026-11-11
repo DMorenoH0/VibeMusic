@@ -11,9 +11,10 @@ import java.net.URLEncoder
 import java.util.Locale
 
 /**
- * A search result from YouTube. Playback is never handled here: the UI opens
- * the official YouTube app or website, so ads, age gates and playback
- * restrictions are always controlled by YouTube.
+ * A search result from YouTube. Playback is never handled here: the UI embeds
+ * the official IFrame player inside VibeMusic, so ads, age gates and playback
+ * restrictions are always controlled by YouTube. The watch and app URIs are
+ * kept only as references; the app never launches them.
  */
 data class YouTubeVideo(
     val id: String,

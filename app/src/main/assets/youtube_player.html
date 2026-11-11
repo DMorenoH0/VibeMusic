@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>VibeMusic · YouTube</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      overflow: hidden;
+    }
+    /* The IFrame API replaces #player with its own iframe and keeps the id,
+       so the same rule positions the player. */
+    #player, iframe {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+  </style>
+</head>
+<body>
+<div id="player"></div>
+<script>
+  var player = null;
+
+  // Percentages and viewport units can resolve to 0 in a WebView, so the
+  // official player is pinned with the real pixel size of the view.
+  function fillViewport() {
+    var el = document.getElementById('player');
+    if (!el || el.tagName !== 'IFRAME') return;
+    var w = window.innerWidth || document.documentElement.clientWidth;
+    var h = window.innerHeight || document.documentElement.clientHeight;
+    if (w <= 0 || h <= 0) return;
+    el.style.position = 'fixed';
+    el.style.top = '0';
+    el.style.left = '0';
+    el.style.width = w + 'px';
+    el.style.height = h + 'px';
+    el.style.border = '0';
+  }
+
+  window.addEventListener('resize', fillViewport);
+
+  function onYouTubeIframeAPIReady() {
+    player = new YT.Player('player', {
+      videoId: '__VIDEO_ID__',
+      playerVars: {
+        autoplay: 1,
+        playsinline: 1,
+        rel: 0,
+        modestbranding: 1,
+        enablejsapi: 1,
+        origin: 'https://com.vibemusic.app'
+      },
+      events: {
+        onReady: function (event) {
+          fillViewport();
+          try { event.target.playVideo(); } catch (ignored) {}
+        }
+      }
+    });
+    setTimeout(fillViewport, 0);
+    setTimeout(fillViewport, 500);
+    setTimeout(fillViewport, 1500);
+  }
+
+  function vibePause() {
+    try { if (player && player.pauseVideo) player.pauseVideo(); } catch (ignored) {}
+  }
+
+  function vibePlay() {
+    try { if (player && player.playVideo) player.playVideo(); } catch (ignored) {}
+  }
+</script>
+<script src="https://www.youtube.com/iframe_api"></script>
+</body>
+</html>

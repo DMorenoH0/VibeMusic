@@ -122,11 +122,14 @@ jobs:
             VibeMusic comprueba este hash antes de ofrecer la instalación.
 
             Novedades:
+            - Reproductor oficial de YouTube integrado en VibeMusic (IFrame Player API en WebView).
+            - Al pulsar un resultado se abre una pantalla propia; ya no se abre YouTube ni Chrome.
+            - Vídeo 16:9, título, canal, duración y descripción con botón para volver a los resultados.
+            - Pausa y reanudación, pausa al salir de la app y mensajes para vídeos no disponibles.
             - Nueva barra inferior de cuatro apartados: Home, Samples, Explore y Library.
             - Pestaña Samples con las instrumentales originales incluidas y reproducción completa.
             - Sección YouTube accesible desde Explore, con búsqueda por título, artista o álbum.
             - Resultados con miniatura, canal y duración mediante YouTube Data API v3.
-            - Reproducción delegada al reproductor oficial de YouTube, sin extraer audio.
             - La búsqueda solo se ejecuta al pulsarla y se cachea para ahorrar cuota.
             - Buscador con catálogo público de Deezer (vistas previas oficiales de 30 s).
             - Bibliotecas separadas: dispositivo, descargas e importados.

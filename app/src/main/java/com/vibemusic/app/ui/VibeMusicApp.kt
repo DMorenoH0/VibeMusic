@@ -22,6 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -57,13 +58,50 @@ import com.vibemusic.app.ui.screens.QueueScreen
 import com.vibemusic.app.ui.screens.SearchScreen
 import com.vibemusic.app.ui.screens.SamplesScreen
 import com.vibemusic.app.ui.screens.SettingsScreen
+import com.vibemusic.app.ui.screens.YouTubePlayerScreen
 import com.vibemusic.app.ui.screens.YouTubeScreen
 import com.vibemusic.app.viewmodel.VibeViewModel
 
 /**
- * Root composable. The main shell has five tabs (Inicio, Buscar, Explorar,
- * Biblioteca and YouTube) and every detail view is a full-screen overlay on
- * top of it.
+ * Keeps the selected YouTube result across configuration changes so the
+ * embedded player can be restored after the activity is recreated.
+ */
+private val YouTubeVideoSaver = listSaver<YouTubeVideo?, String>(
+    save = { video ->
+        if (video == null) {
+            emptyList()
+        } else {
+            listOf(
+                video.id,
+                video.title,
+                video.channel,
+                video.thumbnailUrl,
+                video.durationMs.toString(),
+                video.publishedAt,
+                video.description
+            )
+        }
+    },
+    restore = { values ->
+        if (values.size < 7) {
+            null
+        } else {
+            YouTubeVideo(
+                id = values[0],
+                title = values[1],
+                channel = values[2],
+                thumbnailUrl = values[3],
+                durationMs = values[4].toLongOrNull() ?: 0L,
+                publishedAt = values[5],
+                description = values[6]
+            )
+        }
+    }
+)
+
+/**
+ * Root composable. The main shell has four tabs (Home, Samples, Explore and
+ * Library) and every detail view is a full-screen overlay on top of it.
  */
 @Composable
 fun VibeMusicApp(vm: VibeViewModel) {
@@ -79,6 +117,9 @@ fun VibeMusicApp(vm: VibeViewModel) {
     var tab by rememberSaveable { mutableStateOf(0) }
     var route by rememberSaveable { mutableStateOf<String?>(null) }
     var showUpdateDialog by rememberSaveable { mutableStateOf(false) }
+    var youtubeVideo by rememberSaveable(stateSaver = YouTubeVideoSaver) {
+        mutableStateOf<YouTubeVideo?>(null)
+    }
 
     var actionTrack by remember { mutableStateOf<Track?>(null) }
     var actionPlaylistId by remember { mutableStateOf<Long?>(null) }
@@ -100,26 +141,13 @@ fun VibeMusicApp(vm: VibeViewModel) {
         }
     }
 
-    // Playback is delegated to the official YouTube app (or website). VibeMusic
-    // never extracts audio, so ads and playback restrictions always apply.
-    val openYouTube: (YouTubeVideo) -> Unit = { video ->
-        val openedInApp = runCatching {
-            context.startActivity(
-                Intent(Intent.ACTION_VIEW, Uri.parse(video.appUri))
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            )
-        }.isSuccess
-        if (!openedInApp) {
-            val openedInBrowser = runCatching {
-                context.startActivity(
-                    Intent(Intent.ACTION_VIEW, Uri.parse(video.watchUrl))
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                )
-            }.isSuccess
-            if (!openedInBrowser) {
-                vm.notify("No se encontró el reproductor oficial de YouTube.")
-            }
-        }
+    // YouTube results play inside VibeMusic through the official embedded
+    // player. Local playback is paused first so two audio sources never
+    // overlap; Media3 itself is not modified.
+    val openYouTubePlayer: (YouTubeVideo) -> Unit = { video ->
+        if (player.isPlaying) vm.togglePlayPause()
+        youtubeVideo = video
+        route = "youtubePlayer"
     }
 
     val notificationLauncher = rememberLauncherForActivityResult(
@@ -175,7 +203,11 @@ fun VibeMusicApp(vm: VibeViewModel) {
     }
 
     BackHandler(enabled = route != null || showUpdateDialog) {
-        if (showUpdateDialog) showUpdateDialog = false else route = null
+        when {
+            showUpdateDialog -> showUpdateDialog = false
+            route == "youtubePlayer" -> route = "youtube"
+            else -> route = null
+        }
     }
 
     val updateAvailable = update.available &&
@@ -304,9 +336,23 @@ fun VibeMusicApp(vm: VibeViewModel) {
             route == "youtube" -> Box(overlayModifier) {
                 YouTubeScreen(
                     vm = vm,
-                    onPlayVideo = openYouTube,
+                    onPlayVideo = openYouTubePlayer,
                     onBack = { route = null }
                 )
+            }
+
+            route == "youtubePlayer" -> {
+                val video = youtubeVideo
+                if (video == null) {
+                    LaunchedEffect(Unit) { route = "youtube" }
+                } else {
+                    Box(overlayModifier) {
+                        YouTubePlayerScreen(
+                            video = video,
+                            onBack = { route = "youtube" }
+                        )
+                    }
+                }
             }
 
             route == "settings" -> Box(overlayModifier) {
