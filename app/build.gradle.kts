@@ -7,8 +7,8 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
-val vibeVersionName = (findProperty("vibeVersionName") as String?) ?: "1.2.1"
-val vibeVersionCode = ((findProperty("vibeVersionCode") as String?) ?: "4").toInt()
+val vibeVersionName = (findProperty("vibeVersionName") as String?) ?: "2.0.0"
+val vibeVersionCode = ((findProperty("vibeVersionCode") as String?) ?: "6").toInt()
 val googleWebClientId = (findProperty("vibeGoogleWebClientId") as String?)
     ?: System.getenv("VIBE_GOOGLE_WEB_CLIENT_ID")
     ?: ""
@@ -26,6 +26,15 @@ fun localProperty(name: String): String? {
 val youtubeApiKey = (findProperty("vibeYouTubeApiKey") as String?)
     ?: System.getenv("VIBE_YOUTUBE_API_KEY")
     ?: localProperty("VIBE_YOUTUBE_API_KEY")
+    ?: ""
+
+// Optional intermediary service. When set, the app sends searches to this
+// endpoint instead of Google, so no API key is embedded in the APK. The
+// endpoint must answer {"items":[{"id","title","channel","thumbnail",
+// "durationMs","publishedAt","description"}]}.
+val youtubeProxyUrl = (findProperty("vibeYouTubeProxyUrl") as String?)
+    ?: System.getenv("VIBE_YOUTUBE_PROXY_URL")
+    ?: localProperty("VIBE_YOUTUBE_PROXY_URL")
     ?: ""
 
 // Optional release signing. The CI workflow decodes a keystore secret into
@@ -56,6 +65,11 @@ android {
             "String",
             "YOUTUBE_API_KEY",
             "\"${youtubeApiKey.replace("\"", "\\\"")}\""
+        )
+        buildConfigField(
+            "String",
+            "YOUTUBE_PROXY_URL",
+            "\"${youtubeProxyUrl.replace("\"", "\\\"")}\""
         )
         buildConfigField("String", "RELEASES_REPO", "\"DMorenoH0/VibeMusic\"")
     }

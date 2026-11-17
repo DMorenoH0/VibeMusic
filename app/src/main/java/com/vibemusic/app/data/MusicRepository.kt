@@ -4,14 +4,17 @@ import android.content.Context
 import android.net.Uri
 import com.vibemusic.app.data.db.DownloadEntity
 import com.vibemusic.app.data.db.FavoriteEntity
+import com.vibemusic.app.data.db.ListeningEventEntity
 import com.vibemusic.app.data.db.PlaylistEntity
 import com.vibemusic.app.data.db.PlaylistWithCount
 import com.vibemusic.app.data.db.RecentEntity
 import com.vibemusic.app.data.db.VibeMusicDatabase
 import com.vibemusic.app.data.db.toFavorite
+import com.vibemusic.app.data.db.toListeningEvent
 import com.vibemusic.app.data.db.toRecent
 import com.vibemusic.app.data.db.toTrack
 import com.vibemusic.app.data.db.toPlaylistTrack
+import com.vibemusic.app.data.download.DownloadRequest
 import com.vibemusic.app.data.model.Track
 import com.vibemusic.app.data.model.TrackSource
 import kotlinx.coroutines.Dispatchers
@@ -55,6 +58,10 @@ class MusicRepository(context: Context, val settings: SettingsStore) {
     val playlists: Flow<List<PlaylistWithCount>> = dao.observePlaylists()
     val recent: Flow<List<Track>> = dao.observeRecent().map { list -> list.map { it.toTrack() } }
     val downloads: Flow<List<Track>> = dao.observeDownloads().map { list -> list.map { it.toTrack() } }
+    val downloadEntities: Flow<List<DownloadEntity>> = dao.observeDownloads()
+    val listeningEvents: Flow<List<ListeningEventEntity>> = dao.observeListeningEvents()
+    val allPlaylistTracksFlow: Flow<List<Track>> =
+        dao.observeAllPlaylistTracks().map { list -> list.map { it.toTrack() } }
 
     val amoled: StateFlow<Boolean> = settings.amoled
     val autoScan: StateFlow<Boolean> = settings.autoScan
@@ -118,6 +125,26 @@ class MusicRepository(context: Context, val settings: SettingsStore) {
         dao.renamePlaylist(id, name.trim().take(60).ifBlank { "Mi lista" }, System.currentTimeMillis())
     }
 
+    suspend fun setPlaylistCover(id: Long, coverUri: String?) = withContext(Dispatchers.IO) {
+        dao.updatePlaylistCover(id, coverUri, System.currentTimeMillis())
+    }
+
+    suspend fun movePlaylistTrack(playlistId: Long, trackId: String, delta: Int) =
+        withContext(Dispatchers.IO) {
+            val tracks = dao.observePlaylistTracks(playlistId).first()
+            val index = tracks.indexOfFirst { it.trackId == trackId }
+            if (index < 0) return@withContext
+            val target = (index + delta).coerceIn(0, tracks.lastIndex)
+            if (target == index) return@withContext
+            val reordered = tracks.toMutableList().apply {
+                add(target, removeAt(index))
+            }
+            reordered.forEachIndexed { position, entity ->
+                dao.updatePlaylistTrackPosition(playlistId, entity.trackId, position)
+            }
+            dao.touchPlaylist(playlistId, System.currentTimeMillis())
+        }
+
     suspend fun deletePlaylist(id: Long) = withContext(Dispatchers.IO) {
         dao.deletePlaylist(id)
     }
@@ -153,13 +180,11 @@ class MusicRepository(context: Context, val settings: SettingsStore) {
 
     // ---------------- Downloads / imports ----------------
     suspend fun download(
-        url: String,
-        title: String,
-        artist: String,
-        onProgress: (Float) -> Unit
+        request: DownloadRequest,
+        onProgress: (AudioDownloader.ProgressUpdate) -> Unit
     ): Track = withContext(Dispatchers.IO) {
-        val fetched = downloader.download(url, title, artist, settings.wifiOnly.value, onProgress)
-        storeFetched(fetched, TrackSource.DOWNLOAD, url)
+        val fetched = downloader.download(request, onProgress)
+        storeFetched(fetched, TrackSource.DOWNLOAD, request.url)
     }
 
     suspend fun importDocument(uri: Uri, displayName: String?): Track = withContext(Dispatchers.IO) {
@@ -179,11 +204,15 @@ class MusicRepository(context: Context, val settings: SettingsStore) {
             title = fetched.title,
             artist = fetched.artist,
             album = fetched.album,
-            fileName = fetched.file.absolutePath,
+            fileName = fetched.uri,
             sourceUrl = sourceUrl,
             durationMs = fetched.durationMs,
             downloadedAt = System.currentTimeMillis(),
-            source = source.name
+            source = source.name,
+            artworkUri = fetched.artworkUri,
+            sizeBytes = fetched.sizeBytes,
+            mime = fetched.mime,
+            artworkPath = fetched.artworkUri
         )
         dao.upsertDownload(entity)
         return entity.toTrack()
@@ -192,7 +221,14 @@ class MusicRepository(context: Context, val settings: SettingsStore) {
     suspend fun deleteDownload(track: Track) = withContext(Dispatchers.IO) {
         val entity = dao.getDownload(track.id)
         dao.deleteDownload(track.id)
-        entity?.let { File(it.fileName).takeIf { file -> file.exists() }?.delete() }
+        entity?.let { stored ->
+            downloader.deleteStored(stored.fileName)
+            stored.artworkUri?.let { artwork ->
+                if (artwork.startsWith("file:")) {
+                    runCatching { File(Uri.parse(artwork).path.orEmpty()).delete() }
+                }
+            }
+        }
     }
 
     fun downloadedFileExists(track: Track): Boolean =
@@ -207,8 +243,12 @@ class MusicRepository(context: Context, val settings: SettingsStore) {
         var removedFiles = 0
         if (deleteAudio) {
             dao.allDownloads().forEach { entity ->
-                val file = File(entity.fileName)
-                if (file.exists() && file.delete()) removedFiles++
+                if (downloader.deleteStored(entity.fileName)) removedFiles++
+                entity.artworkUri?.let { artwork ->
+                    if (artwork.startsWith("file:")) {
+                        runCatching { File(Uri.parse(artwork).path.orEmpty()).delete() }
+                    }
+                }
             }
             dao.clearDownloads()
         }
@@ -216,6 +256,7 @@ class MusicRepository(context: Context, val settings: SettingsStore) {
         dao.clearPlaylists()
         dao.clearFavorites()
         dao.clearRecent()
+        dao.clearListeningEvents()
         downloader.deleteAppAudio(deleteAudio)
         appContext.cacheDir?.listFiles()?.forEach { it.deleteRecursively() }
         settings.clearAll()
@@ -225,6 +266,36 @@ class MusicRepository(context: Context, val settings: SettingsStore) {
     suspend fun playlistTracksOnce(id: Long): List<Track> = withContext(Dispatchers.IO) {
         dao.observePlaylistTracks(id).first().map { it.toTrack() }
     }
+
+    suspend fun allPlaylistTracks(): List<Track> = withContext(Dispatchers.IO) {
+        dao.allPlaylistTracks().map { it.toTrack() }
+    }
+
+    // ---------------- Listening history ----------------
+    suspend fun recordListening(
+        track: Track,
+        positionMs: Long,
+        skipped: Boolean,
+        completed: Boolean
+    ) = withContext(Dispatchers.IO) {
+        if (track.source == TrackSource.ONLINE || track.source == TrackSource.YOUTUBE) {
+            // Online previews and YouTube playback are not part of the local
+            // recommendation model.
+            return@withContext
+        }
+        dao.insertListeningEvent(track.toListeningEvent(positionMs, skipped, completed))
+        dao.trimListeningEvents(System.currentTimeMillis() - 120L * 24 * 60 * 60 * 1000)
+    }
+
+    suspend fun clearListeningHistory() = withContext(Dispatchers.IO) {
+        dao.clearListeningEvents()
+    }
+
+    suspend fun listeningSignals(): List<ListeningEventEntity> = withContext(Dispatchers.IO) {
+        dao.listeningEventsOnce()
+    }
+
+    fun observeListeningSignals(): Flow<List<ListeningEventEntity>> = dao.observeListeningEvents()
 
     // ---------------- Settings ----------------
     fun setAmoled(enabled: Boolean) = settings.setAmoled(enabled)

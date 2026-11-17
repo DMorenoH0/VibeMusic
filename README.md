@@ -7,19 +7,25 @@ API v3 y los reproduce dentro de la app con el reproductor oficial embebido
 (YouTube IFrame Player API en un WebView). No extrae audio de plataformas de
 streaming ni descarga canciones completas de catálogos protegidos.
 
+La versión **2.0.0** añade cinco pestañas, recomendaciones calculadas en el
+dispositivo (**Para ti**), descargas autorizadas con progreso y reanudación,
+biblioteca de descargas con tamaño y portada, perfiles de audio por dispositivo,
+ecualizador con 12 presets, listas ampliadas (portada, reordenación, aleatorio)
+y una pantalla de ajustes organizada por categorías.
+
 ## Funciones
 
 ### Navegación
-- Barra inferior fija de cuatro apartados: **Home**, **Samples**, **Explore** y
-  **Library**.
-- Estilo minimalista sobre `#171717`: iconos rellenos en blanco para el
-  apartado activo, delineados en gris claro para el resto, texto pequeño y
-  transición de color y escala de 180 ms.
-- Altura compacta, cuatro elementos de igual ancho y respeto de los insets de
-  navegación por gestos o botones de Android.
-- La barra permanece visible durante la navegación principal; las pantallas de
-  detalle (reproductor, cola, ajustes, búsqueda y YouTube) se abren encima y se
-  cierran con atrás o con su botón de volver.
+- Barra inferior fija de cinco apartados: **Inicio**, **Explorar**, **Buscar**,
+  **Biblioteca** y **Para ti**.
+- Mini reproductor persistente sobre la barra; el reproductor completo se abre
+  desde cualquier pestaña con la portada, la cola y los controles.
+- Estilo AMOLED oscuro con tarjetas redondeadas, degradados, portadas grandes y
+  animaciones breves; temas Midnight, Ocean, Purple, Crimson, Emerald y Light.
+- Las pantallas de detalle (reproductor, cola, ajustes, búsqueda, YouTube,
+  descargas, Bluetooth, listas y álbumes) se abren encima y se cierran con atrás
+  o con su botón de volver.
+- Diseño adaptado a 1080×2400 y probado en emulador API 37 (Android 16).
 
 ### Reproducción y biblioteca
 - Reproducción en segundo plano con Media3 ExoPlayer y MediaSession.
@@ -50,10 +56,11 @@ streaming ni descarga canciones completas de catálogos protegidos.
   segundo plano, con la misma cola y notificación que el resto de la música.
 
 ### YouTube
-- Sección **YouTube** accesible desde **Explore** (no ocupa una quinta
-  pestaña).
-- Búsqueda por título, artista o álbum con YouTube Data API v3.
-- Resultados con miniatura, canal y duración real (ISO-8601 de `videos.list`).
+- Sección **YouTube** accesible desde **Explorar**; no ocupa una pestaña fija.
+- Búsqueda por título, artista, remezcla, versión extendida, directo, cover o
+  videoclip con YouTube Data API v3.
+- Resultados con miniatura, título, canal, duración real (ISO-8601 de
+  `videos.list`) y fecha de publicación.
 - La consulta solo se envía al pulsar Buscar o el botón del teclado; escribir
   no gasta cuota. Cada consulta correcta se guarda en caché en memoria.
 - Al pulsar un resultado se abre una pantalla de reproducción propia con el
@@ -68,19 +75,78 @@ streaming ni descarga canciones completas de catálogos protegidos.
 - El vídeo se pausa al salir de la app y el WebView se destruye al volver a los
   resultados; la música local (Media3) sigue funcionando aparte.
 - Estados de carga, error (cuota agotada, clave no válida, API deshabilitada,
-  red), resultados vacíos y configuración pendiente.
+  red), resultados vacíos y «Conecta YouTube».
+- La clave se puede pegar en la propia sección YouTube (se comprueba contra
+  Google, se cifra con Android Keystore y se puede borrar), compilar con
+  `VIBE_YOUTUBE_API_KEY` o delegar en un backend con `VIBE_YOUTUBE_PROXY_URL`.
 - **No** se implementa extracción de audio, conversión a MP3, descarga de
   vídeos, reproducción en segundo plano por extracción ni bloqueo de anuncios.
-- Si no se define la clave, la sección muestra «Configuración pendiente» y no
-  realiza ninguna petición.
+- Sin clave guardada, clave compilada ni proxy, la sección muestra «Conecta
+  YouTube» y no realiza ninguna petición.
+- Cada resultado se puede añadir a una lista existente; la referencia se guarda
+  como `youtube:<videoId>` con su miniatura y se abre en el reproductor oficial
+  desde la lista, con vuelta a la lista de origen.
+
+### Para ti (recomendaciones locales)
+- Mezcla diaria, descubrimientos, artistas similares, favoritos, lo más
+  escuchado, contenidos de tus listas y nuevos sonidos.
+- Se calcula **solo en el dispositivo** con historial de escucha, favoritos,
+  listas, saltos y preferencias. No hay peticiones de red ni analítica.
+- La mezcla diaria es estable durante el día y cambia al día siguiente; las
+  canciones saltadas recientemente se excluyen.
+- El historial se puede borrar desde Ajustes → Privacidad sin tocar favoritos ni
+  listas. Las recomendaciones se pueden desactivar por completo.
+
+### Descargas autorizadas
+- Solo enlaces HTTPS directos (MP3, M4A, AAC, OGG/Opus, WAV, FLAC) y archivos
+  elegidos por el usuario. No hay scraping ni extracción de audio de YouTube.
+- Diálogo previo con **calidad** (alta, media, baja; el archivo directo no se
+  recodifica y la app avisa si la fuente solo ofrece una versión) y **conexión**
+  (solo Wi-Fi o Wi-Fi y datos) con aviso de consumo.
+- Progreso con portada, nombre, porcentaje, bytes, velocidad, tiempo restante y
+  botón Cancelar; notificación del sistema mientras la app está en segundo plano.
+- Servicio en primer plano con la parte descargada en caché; si la red se corta,
+  se conserva y el siguiente intento usa `Range` cuando el servidor lo admite.
+- Guardado en el almacenamiento musical (`Music/VibeMusic`) con el nombre
+  original saneado, extensión y metadatos; en Android 10+ se publica en
+  MediaStore. La portada se obtiene del enlace indicado o de los metadatos.
+- La biblioteca de descargas muestra portada, título, artista, duración, fecha,
+  tamaño y permite reproducir, añadir a una lista o eliminar el archivo
+  descargado (solo el que creó VibeMusic). Todo funciona sin Internet.
+
+### Bluetooth y ecualizador
+- Detección de la salida de audio actual con las APIs públicas de Android
+  (`AudioManager`/`AudioDeviceCallback`): tipo, nombre, salida del teléfono,
+  auriculares o altavoz Bluetooth.
+- Fabricante mostrado solo como pista inferida del nombre; Android no expone el
+  modelo real y el usuario puede escribirlo a mano y guardarlo por dispositivo.
+- 12 presets: Bass Boost, Deep Bass, Reggaetón, Dembow, Hip-Hop, Pop, Rock,
+  Electrónica, Vocal, Balanced, Acoustic y Custom.
+- Ecualizador gráfico de cinco bandas (subgraves, graves, medios, medios-altos,
+  agudos) sobre la sesión global de audio, con guardar, restablecer y
+  autoaplicación del perfil al conectar un dispositivo.
+- Se explica en la propia pantalla cuando el fabricante no expone efectos: la UI
+  no simula que el ecualizador funciona. El **códec** Bluetooth (SBC, AAC,
+  aptX, LDAC…) solo está disponible para apps del sistema con permisos
+  privilegiados, así que no se inventa ni se muestra un valor falso.
+
+### Listas
+- Crear, renombrar, cambiar portada desde una imagen del dispositivo y eliminar.
+- La portada elegida se copia al almacenamiento privado de la app, así que sigue
+  visible tras reiniciar aunque el archivo original se mueva o se borre.
+- Añadir canciones locales, descargas, muestras y referencias de YouTube sin
+  duplicar archivos.
+- Reordenar con subir/bajar, reproducir todo, aleatorio y repetir.
+- Persisten en Room y sobreviven a reinicios y actualizaciones.
 
 ### Bibliotecas separadas
 - **Dispositivo**: solo canciones encontradas al escanear el almacenamiento.
-- **Descargas**: solo archivos descargados desde VibeMusic, con fecha de
-  descarga.
+- **Descargas**: solo archivos descargados desde VibeMusic, con fecha, tamaño y
+  portada cuando existe.
 - **Importados**: copias privadas creadas al importar archivos.
 - **Álbumes**, **Listas** y **Favoritos**.
-- Eliminar una descarga de la app no borra archivos ajenos a ella.
+- Eliminar una descarga de la app borra el archivo que creó VibeMusic y su fila
+  de MediaStore; no toca archivos ajenos a la app.
 
 ### CSV
 - Exportación de una lista a CSV con título, artista, álbum, duración e ISRC.
@@ -151,17 +217,33 @@ muestra «Configuración pendiente» y no contacta con Google.
 
 ### YouTube Data API v3
 
-La clave nunca se guarda en el repositorio. El script de Gradle la lee, por
-orden de prioridad, de:
+La app admite tres formas de configurar la búsqueda, de la más segura a la más
+sencilla:
 
-1. `-PvibeYouTubeApiKey=…` (propiedad de Gradle),
-2. la variable de entorno `VIBE_YOUTUBE_API_KEY`,
-3. `VIBE_YOUTUBE_API_KEY` en `local.properties` (ignorado por Git).
+1. **Servicio intermediario (recomendado)**: define `VIBE_YOUTUBE_PROXY_URL` al
+   compilar (propiedad `vibeYouTubeProxyUrl`, variable de entorno o
+   `local.properties`). El APK no contiene ninguna clave y las búsquedas se
+   envían a tu backend. El endpoint recibe `?q=consulta` y debe responder
+   `{"items":[{"id":"…","title":"…","channel":"…","thumbnail":"https://…",
+   "durationMs":213000,"publishedAt":"…","description":"…"}]}`. La app acepta
+   también `duration` en formato ISO-8601 y descarta miniaturas que no sean
+   HTTPS.
+2. **Clave introducida en el dispositivo**: desde la sección YouTube (icono de
+   llave) se pega la clave. La app la comprueba con Google mediante `videos.list`
+   (1 unidad de cuota) antes de guardarla cifrada con Android Keystore
+   (AES-256/GCM). La clave guardada tiene prioridad sobre la clave compilada y
+   se puede eliminar desde la misma pantalla.
+3. **Clave compilada**: el script de Gradle la lee, por orden de prioridad, de
+   `-PvibeYouTubeApiKey=…`, la variable de entorno `VIBE_YOUTUBE_API_KEY` o
+   `VIBE_YOUTUBE_API_KEY` en `local.properties` (ignorado por Git). En GitHub
+   Actions se define como secreto del repositorio
+   (`Settings → Secrets and variables → Actions → VIBE_YOUTUBE_API_KEY`).
 
-En GitHub Actions se define como secreto del repositorio
-(`Settings → Secrets and variables → Actions → VIBE_YOUTUBE_API_KEY`). Si el
-secreto no existe, la app compila igual y la pestaña YouTube muestra
-«Configuración pendiente» sin enviar ninguna petición.
+Si no hay clave guardada, clave compilada ni proxy, la sección YouTube muestra
+«Conecta YouTube» y no envía consultas. La clave nunca se escribe en logs y las
+peticiones directas envían las cabeceras `X-Android-Package` y `X-Android-Cert`
+(SHA-1 de la firma) para que Google pueda restringir la clave al paquete
+`com.vibemusic.app` y al certificado de release.
 
 Pasos para crear la clave:
 
@@ -174,9 +256,9 @@ Pasos para crear la clave:
 
 Cuota: la API gratuita incluye 10.000 unidades al día. Cada búsqueda nueva usa
 `search.list` (100 unidades) y `videos.list` (1 unidad). Por eso la app solo
-busca cuando el usuario lo pide y cachea los resultados en memoria. La clave
-viaja en el APK porque la API se consume desde el cliente; su protección real
-son las restricciones de paquete y firma en Google Cloud.
+busca cuando el usuario lo pide y cachea los resultados en memoria. Con una
+clave en el APK, su protección real son las restricciones de paquete y firma en
+Google Cloud; el proxy evita esa exposición por completo.
 
 ## Pruebas
 
@@ -187,13 +269,18 @@ son las restricciones de paquete y firma en Google Cloud.
 Cubren el parser/exportador CSV, el comparador de versiones y el parser de
 releases de GitHub, los parsers de Deezer, el parser del perfil de Google y el
 cliente de YouTube (URLs, identificadores, combinación de `search.list` +
-`videos.list`, duraciones ISO-8601 y errores de cuota o clave).
+`videos.list`, duraciones ISO-8601, errores de cuota o clave, modo proxy,
+validación de credenciales y formato de la clave). Desde 2.0.0 se añaden 13
+pruebas: 9 del motor de recomendaciones (estabilidad diaria, exclusión de
+saltadas, orden por reproducciones, favoritos, listas, descubrimientos, artistas
+y géneros, fuerza de la señal) y 4 de los presets del ecualizador (12 nombres
+únicos, rangos válidos, Balanced plano y búsqueda tolerante a mayúsculas).
+En total son **56 pruebas unitarias** en 9 suites.
 
 En el emulador API 37 se han probado además la barra inferior de cuatro
 apartados (a 411 dp y a 360 dp de ancho), Samples, el buscador online de Deezer,
-la sección YouTube (estado sin clave y error real de clave no válida), la
-reproducción local completa con notificación y cola, el reproductor, ajustes, el
-diálogo de borrado de datos y la actualización 1.1.0 → 1.2.0 sin desinstalar.
+la reproducción local completa con notificación y cola, el reproductor, ajustes,
+el diálogo de borrado de datos y la actualización 1.1.0 → 1.2.0 sin desinstalar.
 
 En 1.2.1 se verificó en el mismo emulador el reproductor embebido de YouTube con
 un vídeo de prueba: carga de la IFrame API dentro del WebView, vídeo visible en
@@ -202,18 +289,41 @@ pasar la app a segundo plano, regreso a los resultados con el WebView destruido
 y ausencia de apps externas en primer plano. También se comprobó el mensaje de
 error con un identificador de vídeo no disponible.
 
-La búsqueda de YouTube con resultados reales y la pulsación de un resultado real
-no se han podido ejecutar porque no hay una clave válida de YouTube Data API en
-este entorno; la app no incluye ninguna clave. El resto del flujo (apertura de
-la pantalla interna, carga del vídeo por ID, reproducción, pausa, errores y
-vuelta a los resultados) sí se ha ejecutado.
+En 1.2.2 se comprobaron en el emulador el formulario y el diálogo de clave, el
+error de formato, el error real de Google con una clave con formato válido pero
+inexistente, el error sin conexión, la reproducción local con pausa y
+reanudación, y la actualización 1.2.1 → 1.2.2 sin desinstalar. La búsqueda con
+resultados reales sigue pendiente de una clave válida: no hay acceso a Google
+Cloud en este entorno y la app no incluye ninguna clave.
+
+En 2.0.0 se verificaron en el emulador API 37: las cinco pestañas y la
+navegación a Ajustes → Bluetooth y ecualizador; la pantalla de ecualizador con
+la salida del teléfono, los 12 presets, la aplicación de Bass Boost (5/4/0/-1/0
+dB), el mensaje de ajuste aplicado y la explicación honesta del códec; la
+descarga completa de un MP3 directo de SoundHelix con nombre original
+(`SoundHelix-Song-3.mp3`), metadatos, duración, tamaño y reproducción local; el
+diálogo de progreso real (79 %, 6,4 MB de 8,1 MB, 6,4 MB/s, «Quedan 1 s»);
+la cancelación con conservación del archivo parcial (5,2 MB) y la
+reanudación en un segundo intento; la biblioteca con fecha y tamaño; la
+eliminación segura (desaparece de MediaStore y del almacenamiento) y la
+persistencia tras reiniciar; la creación de una lista, el renombrado, la
+portada (copiada a almacenamiento privado y visible tras reiniciar), la
+reordenación, la reproducción y la eliminación de una canción; y la
+migración 1→2 de la base de datos conservando las canciones de la versión
+anterior.
 
 ## Arquitectura
 
-- `data/`: Room, MediaStore, descargas, ajustes, CSV, Deezer, GitHub, Google y
-  YouTube Data API v3 (`data/youtube`).
+- `data/`: Room (v2 con migración desde 1.x), MediaStore, descargas, ajustes,
+  CSV, Deezer, GitHub, Google y YouTube Data API v3 (`data/youtube`).
+- `data/recommend/`: motor local y determinista de recomendaciones, sin red.
+- `audio/`: detección de salida Bluetooth, perfiles por dispositivo y
+  ecualizador global (`EqualizerController`, `EqPresets`).
+- `data/download/`: bus de progreso, servicio en primer plano y modelo de
+  solicitud persistente.
 - `playback/`: servicio Media3, controlador y sesión multimedia.
-- `ui/`: pantallas Compose (incluidas `SamplesScreen`, `YouTubeScreen` y
+- `ui/`: pantallas Compose (incluidas `ForYouScreen`, `DownloadsScreen`,
+  `BluetoothScreen`, `PlaylistDetailScreen`, `SamplesScreen`, `YouTubeScreen` y
   `YouTubePlayerScreen` con su WebView), componentes, tema y diálogos.
 - `assets/youtube_player.html`: plantilla auditable del reproductor oficial
   (IFrame Player API, `playsinline`, sin extracción de audio).
@@ -239,20 +349,37 @@ API 37:
   pasar a segundo plano, mensaje de error con vídeo no disponible, vuelta a los
   resultados y destrucción del WebView. La reproducción local (Media3) se pausa
   al abrir el reproductor de YouTube y no se ve afectada.
+- 1.2.2: configuración de la clave de YouTube dentro de la app (icono de llave y
+  tarjeta «Conecta YouTube»), comprobación real contra Google antes de guardar,
+  cifrado con Android Keystore, error de formato, error real de Google con clave
+  inexistente, error sin conexión, reproducción local con pausa y reanudación.
+- 2.0.0: cinco pestañas y mini reproductor; «Para ti» con mezcla diaria y
+  descubrimientos; ajustes por categorías con descargas, Bluetooth y privacidad;
+  migración de base de datos 1→2; descarga real de un MP3 directo con progreso,
+  cancelación, reanudación y biblioteca; eliminación segura; ecualizador global
+  con presets; creación de listas.
 - Actualización: se instaló el APK publicado de 1.1.0 y después el de 1.2.0
   firmado con el mismo certificado, sin desinstalar y conservando los datos.
-  El APK que publica CI tiene el mismo keystore estable.
+  El APK que publica CI tiene el mismo keystore estable. En 1.2.2 se comprobó
+  además la actualización 1.2.1 → 1.2.2 conservando `firstInstallTime` y datos.
 
 La búsqueda de YouTube con resultados reales no se ha podido verificar porque
-no hay una clave válida en este entorno. La app no incluye ninguna clave.
+no hay una clave válida en este entorno. La app no incluye ninguna clave; con
+una clave válida pegada en la sección YouTube, el mismo flujo ya probado
+(`search.list` + `videos.list`, apertura del vídeo y reproducción embebida)
+queda operativo sin recompilar.
 
 ## Limitaciones
 
-- La búsqueda de YouTube necesita una clave válida de YouTube Data API v3
-  configurada como `VIBE_YOUTUBE_API_KEY`. Sin ella, la sección muestra
-  «Configuración pendiente» y no envía peticiones; el resto de la app funciona
-  igual. La cuota gratuita es de 10.000 unidades/día y cada búsqueda consume
-  unas 101.
+- La búsqueda de YouTube necesita una clave válida de YouTube Data API v3, un
+  proxy configurado o una clave pegada en la sección YouTube. Sin ninguna de
+  ellas, la sección muestra «Conecta YouTube» y no envía peticiones; el resto de
+  la app funciona igual. La cuota gratuita es de 10.000 unidades/día y cada
+  búsqueda consume unas 101.
+- La clave guardada en el dispositivo se cifra con Android Keystore y no se
+  incluye en copias de seguridad, pero un dispositivo con root podría llegar a
+  extraerla. Para producción se recomienda el servicio intermediario
+  `VIBE_YOUTUBE_PROXY_URL`, que no expone ninguna clave en el APK.
 - Los vídeos de YouTube se reproducen con el reproductor oficial embebido, con
   sus anuncios y restricciones. No hay extracción de audio, descarga, MP3 ni
   reproducción en segundo plano de YouTube.
@@ -262,10 +389,20 @@ no hay una clave válida en este entorno. La app no incluye ninguna clave.
   abrir una app externa.
 - El buscador online reproduce únicamente vistas previas de 30 segundos; no hay
   reproducción completa ni descarga de canciones de Deezer.
+- El ecualizador usa la sesión global de audio. Funciona en el emulador API 37
+  con 5 bandas reales, pero algunos fabricantes no exponen efectos globales; en
+  ese caso la app lo indica y no simula que los sliders tengan efecto. No hay
+  mediciones acústicas por modelo: los presets son puntos de partida.
+- El códec Bluetooth negociado (SBC, AAC, aptX, LDAC…) no se muestra porque
+  Android solo lo expone a apps del sistema con permisos privilegiados. La app
+  evita inventarlo y lo explica en la pantalla.
+- El modelo Bluetooth no existe como API pública: se muestra el nombre, el
+  fabricante solo como pista y el usuario puede guardar el modelo manualmente.
 - Las funciones nuevas se han probado en emulador API 37; no se han probado en
-  un teléfono físico (incluido el Vivo V40 SE).
+  un teléfono físico (incluido el Vivo V40 SE) ni con auriculares o altavoces
+  Bluetooth reales.
 - Las descargas solo aceptan URLs HTTPS directas; no hay scraping ni extracción
-  de audio de YouTube.
+  de audio de YouTube. La reanudación depende de que el servidor acepte `Range`.
 - No se ofrece un catálogo comercial ilimitado.
 - El inicio de sesión con Google requiere configurar un ID de cliente OAuth.
 - La firma de la versión 1.0.2 se generó con un keystore debug efímero del

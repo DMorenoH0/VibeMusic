@@ -323,7 +323,8 @@ fun PlaylistHero(
     name: String,
     subtitle: String,
     seed: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    artworkUri: String? = null
 ) {
     Box(
         modifier = modifier
@@ -337,7 +338,7 @@ fun PlaylistHero(
     ) {
         AlbumArt(
             title = name,
-            artworkUri = null,
+            artworkUri = artworkUri,
             seed = seed,
             modifier = Modifier
                 .align(Alignment.CenterEnd)

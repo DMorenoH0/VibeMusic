@@ -1,6 +1,7 @@
 package com.vibemusic.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,34 +22,56 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Key
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SmartDisplay
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.vibemusic.app.data.db.PlaylistWithCount
 import com.vibemusic.app.data.youtube.YouTubeVideo
 import com.vibemusic.app.ui.components.Artwork
 import com.vibemusic.app.ui.components.EmptyState
 import com.vibemusic.app.ui.components.ErrorBanner
 import com.vibemusic.app.ui.components.VibePageBackground
+import com.vibemusic.app.ui.dialogs.CreatePlaylistDialog
 import com.vibemusic.app.ui.formatVideoDuration
 import com.vibemusic.app.ui.paletteFor
 import com.vibemusic.app.ui.theme.VibeCream
@@ -71,7 +94,11 @@ fun YouTubeScreen(
 ) {
     val query by vm.youtubeQuery.collectAsStateWithLifecycle()
     val state by vm.youtubeSearch.collectAsStateWithLifecycle()
+    val playlists by vm.playlists.collectAsStateWithLifecycle()
     val keyboard = LocalSoftwareKeyboardController.current
+    var showKeyDialog by remember { mutableStateOf(false) }
+    var actionVideo by remember { mutableStateOf<YouTubeVideo?>(null) }
+    var createPlaylistForVideo by remember { mutableStateOf<YouTubeVideo?>(null) }
 
     VibePageBackground {
         Column(
@@ -84,7 +111,10 @@ fun YouTubeScreen(
                     .fillMaxWidth()
                     .padding(start = 20.dp, end = 16.dp, top = 12.dp, bottom = 6.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     if (onBack != null) {
                         IconButton(
                             onClick = onBack,
@@ -112,7 +142,7 @@ fun YouTubeScreen(
                         )
                     }
                     Spacer(Modifier.width(10.dp))
-                    Column {
+                    Column(Modifier.weight(1f)) {
                         Text(
                             "YouTube",
                             style = MaterialTheme.typography.headlineLarge,
@@ -122,6 +152,16 @@ fun YouTubeScreen(
                             "Busca y reproduce dentro de VibeMusic con el reproductor oficial.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = VibeMuted
+                        )
+                    }
+                    IconButton(onClick = {
+                        vm.dismissYouTubeKeyState()
+                        showKeyDialog = true
+                    }) {
+                        Icon(
+                            Icons.Rounded.Key,
+                            contentDescription = "Configurar clave de YouTube",
+                            tint = VibeMuted
                         )
                     }
                 }
@@ -186,7 +226,7 @@ fun YouTubeScreen(
                 contentPadding = PaddingValues(bottom = 28.dp)
             ) {
                 if (!state.configured) {
-                    item { YouTubeConfigurationCard() }
+                    item { YouTubeConfigurationCard(vm) }
                 } else if (query.isBlank()) {
                     item { YouTubeIntroCard() }
                 } else {
@@ -242,7 +282,11 @@ fun YouTubeScreen(
                                     )
                                 }
                                 items(state.results, key = { it.id }) { video ->
-                                    YouTubeResultRow(video = video, onClick = { onPlayVideo(video) })
+                                    YouTubeResultRow(
+                                        video = video,
+                                        onClick = { onPlayVideo(video) },
+                                        onMore = { actionVideo = video }
+                                    )
                                 }
                                 item { YouTubePlaybackNote() }
                             }
@@ -252,10 +296,131 @@ fun YouTubeScreen(
             }
         }
     }
+
+    if (showKeyDialog) {
+        YouTubeKeyDialog(
+            vm = vm,
+            onDismiss = { showKeyDialog = false }
+        )
+    }
+
+    actionVideo?.let { video ->
+        YouTubeAddToPlaylistSheet(
+            video = video,
+            playlists = playlists,
+            onDismiss = { actionVideo = null },
+            onAdd = { id ->
+                vm.addYouTubeToPlaylist(id, video)
+                actionVideo = null
+            },
+            onNew = {
+                createPlaylistForVideo = video
+                actionVideo = null
+            }
+        )
+    }
+
+    createPlaylistForVideo?.let { video ->
+        CreatePlaylistDialog(
+            title = "Nueva lista con este vídeo",
+            onDismiss = { createPlaylistForVideo = null },
+            onConfirm = { name ->
+                createPlaylistForVideo = null
+                vm.createPlaylistWithYouTube(name, video)
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun YouTubeAddToPlaylistSheet(
+    video: YouTubeVideo,
+    playlists: List<PlaylistWithCount>,
+    onDismiss: () -> Unit,
+    onAdd: (Long) -> Unit,
+    onNew: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = VibeSurface,
+        contentColor = VibeCream,
+        dragHandle = { BottomSheetDefaults.DragHandle(color = VibeLine) }
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(bottom = 28.dp)
+        ) {
+            Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+                Text(
+                    video.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = VibeCream,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    video.channel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = VibeMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            HorizontalDivider(color = VibeLine.copy(alpha = 0.6f))
+            YouTubeSheetAction(Icons.Rounded.Add, "Nueva lista", onNew)
+            playlists.forEach { item ->
+                YouTubeSheetAction(
+                    Icons.Rounded.QueueMusic,
+                    item.playlist.name,
+                    onClick = { onAdd(item.playlist.id) }
+                )
+            }
+            if (playlists.isEmpty()) {
+                Text(
+                    "Todavía no tienes listas. Crea la primera con «Nueva lista».",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = VibeMuted,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
+                )
+            }
+            Text(
+                "Se guarda el enlace del vídeo para abrirlo en el reproductor oficial. " +
+                    "VibeMusic no descarga ni extrae el audio.",
+                style = MaterialTheme.typography.labelSmall,
+                color = VibeMuted,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
+            )
+        }
+    }
 }
 
 @Composable
-private fun YouTubeResultRow(video: YouTubeVideo, onClick: () -> Unit) {
+private fun YouTubeSheetAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, tint = VibeCream, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(16.dp))
+        Text(label, style = MaterialTheme.typography.bodyLarge, color = VibeCream)
+    }
+}
+
+@Composable
+private fun YouTubeResultRow(
+    video: YouTubeVideo,
+    onClick: () -> Unit,
+    onMore: () -> Unit
+) {
     Surface(
         onClick = onClick,
         color = androidx.compose.ui.graphics.Color.Transparent,
@@ -345,6 +510,14 @@ private fun YouTubeResultRow(video: YouTubeVideo, onClick: () -> Unit) {
                     )
                 }
             }
+            IconButton(onClick = onMore, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    Icons.Rounded.MoreVert,
+                    contentDescription = "Añadir a una lista",
+                    tint = VibeMuted,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
     }
 }
@@ -387,7 +560,7 @@ private fun YouTubeIntroCard() {
 }
 
 @Composable
-private fun YouTubeConfigurationCard() {
+private fun YouTubeConfigurationCard(vm: VibeViewModel) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -404,27 +577,166 @@ private fun YouTubeConfigurationCard() {
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                "YouTube sin configurar",
+                "Conecta YouTube",
                 style = MaterialTheme.typography.titleMedium,
                 color = VibeCream
             )
         }
         Spacer(Modifier.height(10.dp))
         Text(
-            "Esta sección necesita una clave de YouTube Data API v3. La app no incluye claves en el repositorio y no envía consultas mientras falte la configuración.",
+            "Añade tu clave de YouTube Data API v3 para buscar vídeos reales. " +
+                "Se guarda cifrada en este dispositivo y solo se envía a Google " +
+                "cuando pulsas Buscar.",
             style = MaterialTheme.typography.bodySmall,
             color = VibeMuted
         )
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(14.dp))
+        YouTubeKeyForm(vm)
+        Spacer(Modifier.height(14.dp))
         Text(
-            "Configuración para desarrolladores:\n" +
-                "1. Crea una clave en Google Cloud con YouTube Data API v3 habilitada.\n" +
-                "2. Restríngela al paquete com.vibemusic.app y a la firma de release.\n" +
-                "3. Define VIBE_YOUTUBE_API_KEY como secreto de GitHub Actions, variable de entorno o en local.properties (ignorado por Git).",
+            "Cómo obtenerla: Google Cloud → YouTube Data API v3 → Credenciales → " +
+                "Clave de API. Restríngela al paquete com.vibemusic.app y a la firma " +
+                "de esta app. También puedes compilar con VIBE_YOUTUBE_API_KEY o " +
+                "VIBE_YOUTUBE_PROXY_URL.",
             style = MaterialTheme.typography.labelSmall,
             color = VibeMuted
         )
     }
+}
+
+@Composable
+private fun YouTubeKeyForm(vm: VibeViewModel) {
+    val keyState by vm.youtubeKeyState.collectAsStateWithLifecycle()
+    var key by remember { mutableStateOf("") }
+    var visible by remember { mutableStateOf(false) }
+
+    OutlinedTextField(
+        value = key,
+        onValueChange = {
+            key = it
+            if (keyState.error != null || keyState.success) vm.dismissYouTubeKeyState()
+        },
+        singleLine = true,
+        label = { Text("Clave de API de YouTube", color = VibeMuted) },
+        placeholder = { Text("AIza…", color = VibeMuted) },
+        visualTransformation = if (visible) {
+            VisualTransformation.None
+        } else {
+            PasswordVisualTransformation()
+        },
+        trailingIcon = {
+            IconButton(onClick = { visible = !visible }) {
+                Icon(
+                    if (visible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                    contentDescription = if (visible) "Ocultar clave" else "Mostrar clave",
+                    tint = VibeMuted
+                )
+            }
+        },
+        shape = RoundedCornerShape(14.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = VibeRed,
+            unfocusedBorderColor = VibeLine,
+            focusedContainerColor = VibeSurface,
+            unfocusedContainerColor = VibeSurface,
+            cursorColor = VibeRed,
+            focusedTextColor = VibeCream,
+            unfocusedTextColor = VibeCream
+        ),
+        modifier = Modifier.fillMaxWidth()
+    )
+
+    Spacer(Modifier.height(10.dp))
+    Button(
+        onClick = { vm.saveYouTubeApiKey(key) },
+        enabled = key.isNotBlank() && !keyState.checking,
+        shape = RoundedCornerShape(50),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        if (keyState.checking) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(16.dp),
+                color = MaterialTheme.colorScheme.onPrimary,
+                strokeWidth = 2.dp
+            )
+            Spacer(Modifier.width(8.dp))
+            Text("Comprobando…")
+        } else {
+            Text("Guardar y comprobar")
+        }
+    }
+
+    keyState.error?.let { error ->
+        Spacer(Modifier.height(8.dp))
+        Text(
+            error,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error
+        )
+    }
+    if (keyState.success) {
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Clave verificada. Escribe una búsqueda para empezar.",
+            style = MaterialTheme.typography.bodySmall,
+            color = VibeRed
+        )
+    }
+    if (vm.youtubeKeyStored) {
+        Spacer(Modifier.height(4.dp))
+        TextButton(onClick = vm::clearYouTubeApiKey) {
+            Text("Quitar clave de este dispositivo", color = VibeMuted)
+        }
+    }
+}
+
+@Composable
+private fun YouTubeKeyDialog(vm: VibeViewModel, onDismiss: () -> Unit) {
+    val keyState by vm.youtubeKeyState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(keyState.success) {
+        if (keyState.success && vm.youtubeConfigured) onDismiss()
+    }
+
+    AlertDialog(
+        onDismissRequest = {
+            vm.dismissYouTubeKeyState()
+            onDismiss()
+        },
+        containerColor = VibeSurface,
+        title = {
+            Text(
+                if (vm.youtubeConfigured) "Clave de YouTube" else "Conectar YouTube",
+                color = VibeCream
+            )
+        },
+        text = {
+            Column {
+                Text(
+                    if (vm.youtubeUsesProxy) {
+                        "Esta compilación usa un servicio intermediario: no necesitas clave en el dispositivo."
+                    } else {
+                        "Pega tu clave de YouTube Data API v3. Se comprueba con Google " +
+                            "antes de guardarse cifrada en este dispositivo."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = VibeMuted
+                )
+                if (!vm.youtubeUsesProxy) {
+                    Spacer(Modifier.height(12.dp))
+                    YouTubeKeyForm(vm)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                vm.dismissYouTubeKeyState()
+                onDismiss()
+            }) {
+                Text("Cerrar", color = VibeRed)
+            }
+        }
+    )
 }
 
 @Composable

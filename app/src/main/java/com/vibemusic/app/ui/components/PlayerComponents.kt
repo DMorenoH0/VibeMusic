@@ -25,15 +25,19 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.LibraryMusic
 import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -162,7 +166,7 @@ fun VibeBottomBar(
         verticalAlignment = Alignment.CenterVertically
     ) {
         BottomBarTab(
-            label = "Home",
+            label = "Inicio",
             selected = selected == 0,
             selectedIcon = Icons.Rounded.Home,
             unselectedIcon = Icons.Outlined.Home,
@@ -170,27 +174,35 @@ fun VibeBottomBar(
             modifier = Modifier.weight(1f)
         )
         BottomBarTab(
-            label = "Samples",
+            label = "Explorar",
             selected = selected == 1,
-            selectedIcon = Icons.Rounded.PlayArrow,
-            unselectedIcon = Icons.Outlined.PlayArrow,
+            selectedIcon = Icons.Rounded.Explore,
+            unselectedIcon = Icons.Outlined.Explore,
             onClick = { onSelect(1) },
             modifier = Modifier.weight(1f)
         )
         BottomBarTab(
-            label = "Explore",
+            label = "Buscar",
             selected = selected == 2,
-            selectedIcon = Icons.Rounded.Explore,
-            unselectedIcon = Icons.Outlined.Explore,
+            selectedIcon = Icons.Rounded.Search,
+            unselectedIcon = Icons.Outlined.Search,
             onClick = { onSelect(2) },
             modifier = Modifier.weight(1f)
         )
         BottomBarTab(
-            label = "Library",
+            label = "Biblioteca",
             selected = selected == 3,
             selectedIcon = Icons.Rounded.LibraryMusic,
             unselectedIcon = Icons.Outlined.LibraryMusic,
             onClick = { onSelect(3) },
+            modifier = Modifier.weight(1f)
+        )
+        BottomBarTab(
+            label = "Para ti",
+            selected = selected == 4,
+            selectedIcon = Icons.Rounded.AutoAwesome,
+            unselectedIcon = Icons.Outlined.AutoAwesome,
+            onClick = { onSelect(4) },
             modifier = Modifier.weight(1f)
         )
     }

@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SmartDisplay
 import androidx.compose.material3.Icon
@@ -59,7 +60,9 @@ fun ExploreScreen(
     onOpenAlbum: (String) -> Unit,
     onOpenPlayer: () -> Unit,
     onRequestPermission: () -> Unit,
-    onOpenAppSettings: () -> Unit
+    onOpenAppSettings: () -> Unit,
+    onOpenSamples: () -> Unit = {},
+    onOpenDownloads: () -> Unit = {}
 ) {
     val tracks by vm.allTracks.collectAsStateWithLifecycle()
     val scanState by vm.scanState.collectAsStateWithLifecycle()
@@ -94,6 +97,20 @@ fun ExploreScreen(
                         SearchBarButton(onClick = onOpenSearch)
                         Spacer(Modifier.height(12.dp))
                         YouTubeEntryCard(onClick = onOpenYouTube)
+                        Spacer(Modifier.height(10.dp))
+                        EntryCard(
+                            icon = Icons.Rounded.SmartDisplay,
+                            title = "Samples",
+                            subtitle = "Pistas de demostración incluidas en VibeMusic.",
+                            onClick = onOpenSamples
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        EntryCard(
+                            icon = Icons.Rounded.CloudDownload,
+                            title = "Descargas",
+                            subtitle = "Tu música offline: portadas, tamaño y reproducción.",
+                            onClick = onOpenDownloads
+                        )
                     }
                 }
 
@@ -191,6 +208,54 @@ private fun YouTubeEntryCard(onClick: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
                 color = VibeMuted
             )
+        }
+        Icon(
+            Icons.Rounded.ChevronRight,
+            contentDescription = null,
+            tint = VibeMuted,
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+@Composable
+private fun EntryCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(VibeSurface)
+            .clickable(onClick = onClick)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier
+                .size(38.dp)
+                .background(VibeRed.copy(alpha = 0.16f), RoundedCornerShape(10.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = VibeRed,
+                modifier = Modifier.size(21.dp)
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleSmall,
+                color = VibeCream,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = VibeMuted)
         }
         Icon(
             Icons.Rounded.ChevronRight,

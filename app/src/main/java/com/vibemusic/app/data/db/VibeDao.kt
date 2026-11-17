@@ -38,6 +38,9 @@ abstract class VibeDao {
     @Query("UPDATE playlists SET name = :name, updatedAt = :updatedAt WHERE id = :id")
     abstract suspend fun renamePlaylist(id: Long, name: String, updatedAt: Long)
 
+    @Query("UPDATE playlists SET coverUri = :coverUri, updatedAt = :updatedAt WHERE id = :id")
+    abstract suspend fun updatePlaylistCover(id: Long, coverUri: String?, updatedAt: Long)
+
     @Query("UPDATE playlists SET updatedAt = :updatedAt WHERE id = :id")
     abstract suspend fun touchPlaylist(id: Long, updatedAt: Long)
 
@@ -70,6 +73,19 @@ abstract class VibeDao {
 
     @Query("SELECT trackId FROM playlist_tracks WHERE playlistId = :playlistId")
     abstract suspend fun playlistTrackIds(playlistId: Long): List<String>
+
+    @Query("SELECT * FROM playlist_tracks ORDER BY addedAt DESC")
+    abstract suspend fun allPlaylistTracks(): List<PlaylistTrackEntity>
+
+    @Query("SELECT * FROM playlist_tracks ORDER BY addedAt DESC")
+    abstract fun observeAllPlaylistTracks(): Flow<List<PlaylistTrackEntity>>
+
+    @Query("UPDATE playlist_tracks SET position = :position WHERE playlistId = :playlistId AND trackId = :trackId")
+    abstract suspend fun updatePlaylistTrackPosition(
+        playlistId: Long,
+        trackId: String,
+        position: Int
+    )
 
     // ---------- Recently played ----------
     @Query("SELECT * FROM recent ORDER BY playedAt DESC LIMIT 20")
@@ -104,6 +120,22 @@ abstract class VibeDao {
 
     @Query("SELECT * FROM downloads")
     abstract suspend fun allDownloads(): List<DownloadEntity>
+
+    // ---------- Listening history (local recommendations) ----------
+    @Query("SELECT * FROM listening_events ORDER BY playedAt DESC LIMIT 500")
+    abstract fun observeListeningEvents(): Flow<List<ListeningEventEntity>>
+
+    @Query("SELECT * FROM listening_events ORDER BY playedAt DESC LIMIT 500")
+    abstract suspend fun listeningEventsOnce(): List<ListeningEventEntity>
+
+    @Insert
+    abstract suspend fun insertListeningEvent(entity: ListeningEventEntity): Long
+
+    @Query("DELETE FROM listening_events")
+    abstract suspend fun clearListeningEvents()
+
+    @Query("DELETE FROM listening_events WHERE playedAt < :before")
+    abstract suspend fun trimListeningEvents(before: Long)
 
     // ---------- Data erasure ----------
     @Query("DELETE FROM favorites")

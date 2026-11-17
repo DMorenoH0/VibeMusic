@@ -6,7 +6,10 @@ enum class TrackSource {
     DOWNLOAD,
     IMPORTED,
     /** Streaming preview resolved through a public catalogue API. */
-    ONLINE
+    ONLINE,
+
+    /** Reference to a YouTube video played by the official embedded player. */
+    YOUTUBE
 }
 
 /**

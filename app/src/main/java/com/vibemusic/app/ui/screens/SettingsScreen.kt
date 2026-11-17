@@ -29,6 +29,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AccountCircle
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Bluetooth
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
@@ -98,7 +100,9 @@ fun SettingsScreen(
     onOpenAppSettings: () -> Unit,
     onOpenLegal: (String) -> Unit,
     onOpenCsv: () -> Unit,
-    onOpenUpdate: () -> Unit
+    onOpenUpdate: () -> Unit,
+    onOpenBluetooth: () -> Unit = {},
+    onOpenDownloads: () -> Unit = {}
 ) {
     val tracks by vm.allTracks.collectAsStateWithLifecycle()
     val favorites by vm.favorites.collectAsStateWithLifecycle()
@@ -112,6 +116,9 @@ fun SettingsScreen(
     val update by vm.update.collectAsStateWithLifecycle()
     val profile by vm.googleProfile.collectAsStateWithLifecycle()
     val auth by vm.auth.collectAsStateWithLifecycle()
+    val recommendationsEnabled by vm.recommendationsEnabled.collectAsStateWithLifecycle()
+    val downloadQuality by vm.downloadQuality.collectAsStateWithLifecycle()
+    val eq by vm.eqState.collectAsStateWithLifecycle()
 
     var confirmClearHistory by remember { mutableStateOf(false) }
     var showWipe by remember { mutableStateOf(false) }
@@ -286,11 +293,74 @@ fun SettingsScreen(
                         onCheckedChange = vm::setWifiOnly
                     )
                     SectionDivider()
+                    Column(Modifier.padding(16.dp)) {
+                        Text(
+                            "Calidad predeterminada",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = VibeCream
+                        )
+                        Text(
+                            "Se propone al iniciar cada descarga. El archivo directo no se recodifica.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = VibeMuted
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            com.vibemusic.app.data.download.DownloadQuality.entries.forEach { quality ->
+                                val selected = downloadQuality == quality
+                                Surface(
+                                    shape = RoundedCornerShape(50),
+                                    color = if (selected) VibeRed else VibeSurfaceHigh,
+                                    modifier = Modifier.clickable { vm.setDownloadQuality(quality) }
+                                ) {
+                                    Text(
+                                        quality.label,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = if (selected) Color.White else VibeMuted,
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    SectionDivider()
+                    ActionRow(
+                        icon = Icons.Rounded.FolderOpen,
+                        title = "Gestionar descargas",
+                        subtitle = "${downloads.size} ${if (downloads.size == 1) "archivo" else "archivos"} en almacenamiento musical",
+                        onClick = onOpenDownloads
+                    )
+                    SectionDivider()
                     Text(
                         "Las descargas usan enlaces directos que tú eliges. La app no extrae audio de YouTube ni de catálogos protegidos.",
                         style = MaterialTheme.typography.bodySmall,
                         color = VibeMuted,
                         modifier = Modifier.padding(16.dp)
+                    )
+                }
+            }
+
+            // ---------------- Bluetooth / EQ ----------------
+            item { SectionHeader("Bluetooth y ecualizador") }
+            item {
+                SettingsCard {
+                    ActionRow(
+                        icon = Icons.Rounded.Bluetooth,
+                        title = eq.activeDeviceName ?: "Sin dispositivo externo",
+                        subtitle = buildString {
+                            append(eq.activeDeviceKind ?: "Salida de audio del teléfono")
+                            if (eq.presetName.isNotBlank()) append(" · ${eq.presetName}")
+                            if (eq.codec != null) append(" · ${eq.codec}")
+                        },
+                        onClick = onOpenBluetooth
+                    )
+                    SectionDivider()
+                    ToggleRow(
+                        icon = Icons.Rounded.Bluetooth,
+                        title = "Ecualización automática",
+                        subtitle = "Aplica el perfil guardado al conectar el dispositivo",
+                        checked = eq.autoApply,
+                        onCheckedChange = vm::setEqAutoApply
                     )
                 }
             }
@@ -523,7 +593,7 @@ fun SettingsScreen(
                                 if (vm.youtubeConfigured) {
                                     "El buscador usa la API oficial. Los vídeos se reproducen en el reproductor oficial de YouTube."
                                 } else {
-                                    "Falta la clave VIBE_YOUTUBE_API_KEY. La sección YouTube no envía consultas hasta configurarla."
+                                    "Añade tu clave en la sección YouTube (icono de llave) o define VIBE_YOUTUBE_API_KEY al compilar. No se envían consultas hasta configurarla."
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = VibeMuted
@@ -622,6 +692,21 @@ fun SettingsScreen(
             item { SectionHeader("Privacidad y datos") }
             item {
                 SettingsCard {
+                    ToggleRow(
+                        icon = Icons.Rounded.AutoAwesome,
+                        title = "Recomendaciones locales",
+                        subtitle = "Analiza tu historial, favoritos y listas en este dispositivo. Nada se envía a servidores.",
+                        checked = recommendationsEnabled,
+                        onCheckedChange = vm::setRecommendationsEnabled
+                    )
+                    SectionDivider()
+                    ActionRow(
+                        icon = Icons.Rounded.CheckCircle,
+                        title = "Borrar historial de escucha",
+                        subtitle = "Elimina las señales usadas por «Para ti». Tus favoritos y listas no se tocan.",
+                        onClick = vm::clearListeningHistory
+                    )
+                    SectionDivider()
                     ActionRow(
                         icon = Icons.Rounded.Security,
                         title = "Política de privacidad",

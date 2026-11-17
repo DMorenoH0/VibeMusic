@@ -80,7 +80,11 @@ fun RecentEntity.toTrack() = Track(
 
 fun DownloadEntity.toTrack() = Track(
     id = trackId,
-    uri = android.net.Uri.fromFile(java.io.File(fileName)).toString(),
+    uri = if (fileName.contains("://") || fileName.startsWith("content:")) {
+        fileName
+    } else {
+        android.net.Uri.fromFile(java.io.File(fileName)).toString()
+    },
     title = title,
     artist = artist,
     album = album,
@@ -89,4 +93,37 @@ fun DownloadEntity.toTrack() = Track(
     source = runCatching { TrackSource.valueOf(source) }.getOrDefault(TrackSource.DOWNLOAD),
     fileName = fileName,
     addedAt = downloadedAt
+)
+
+fun Track.toListeningEvent(
+    positionMs: Long,
+    skipped: Boolean,
+    completed: Boolean,
+    now: Long = System.currentTimeMillis()
+) = ListeningEventEntity(
+    trackId = id,
+    title = title,
+    artist = artist,
+    album = album,
+    genre = genre,
+    source = source.name,
+    artworkUri = artworkUri,
+    durationMs = durationMs,
+    positionMs = positionMs,
+    playedAt = now,
+    skipped = skipped,
+    completed = completed
+)
+
+fun ListeningEventEntity.toTrack() = Track(
+    id = trackId,
+    uri = "",
+    title = title,
+    artist = artist,
+    album = album,
+    durationMs = durationMs,
+    artworkUri = artworkUri,
+    source = runCatching { TrackSource.valueOf(source) }.getOrDefault(TrackSource.LOCAL),
+    genre = genre,
+    addedAt = playedAt
 )

@@ -48,9 +48,15 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.RadioButton
 import com.vibemusic.app.data.db.PlaylistWithCount
+import com.vibemusic.app.data.download.DownloadProgress
+import com.vibemusic.app.data.download.DownloadQuality
+import com.vibemusic.app.data.download.DownloadRequest
+import com.vibemusic.app.data.download.DownloadStatus
 import com.vibemusic.app.data.model.Track
 import com.vibemusic.app.data.model.TrackSource
+import com.vibemusic.app.ui.components.AlbumArt
 import com.vibemusic.app.ui.components.CoverArt
 import com.vibemusic.app.ui.theme.VibeCream
 import com.vibemusic.app.ui.theme.VibeLine
@@ -59,6 +65,7 @@ import com.vibemusic.app.ui.theme.VibeRed
 import com.vibemusic.app.ui.theme.VibeSurface
 import com.vibemusic.app.ui.theme.VibeSurfaceHigh
 import com.vibemusic.app.viewmodel.TransferState
+import java.util.Locale
 
 @Composable
 fun CreatePlaylistDialog(
@@ -101,11 +108,16 @@ fun CreatePlaylistDialog(
 @Composable
 fun DownloadDialog(
     onDismiss: () -> Unit,
-    onDownload: (url: String, title: String, artist: String) -> Unit
+    onDownload: (DownloadRequest) -> Unit,
+    initialQuality: DownloadQuality = DownloadQuality.HIGH,
+    initialWifiOnly: Boolean = true
 ) {
     var url by rememberSaveable { mutableStateOf("") }
     var title by rememberSaveable { mutableStateOf("") }
     var artist by rememberSaveable { mutableStateOf("") }
+    var qualityName by rememberSaveable { mutableStateOf(initialQuality.name) }
+    var wifiOnly by rememberSaveable { mutableStateOf(initialWifiOnly) }
+    val quality = DownloadQuality.byName(qualityName)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -116,12 +128,12 @@ fun DownloadDialog(
         text = {
             Column(
                 Modifier
-                    .height(300.dp)
+                    .height(440.dp)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    "Pega un enlace directo a un archivo de audio (MP3, M4A, OGG, FLAC, WAV…).",
+                    "Enlace directo a un archivo autorizado (MP3, M4A, OGG, FLAC, WAV…).",
                     style = MaterialTheme.typography.bodySmall,
                     color = VibeMuted
                 )
@@ -149,6 +161,63 @@ fun DownloadDialog(
                     colors = vibeTextFieldColors(),
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                Text(
+                    "CALIDAD",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = VibeMuted
+                )
+                DownloadQuality.entries.forEach { option ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { qualityName = option.name }
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = quality == option,
+                            onClick = { qualityName = option.name }
+                        )
+                        Column(Modifier.weight(1f)) {
+                            Text(option.label, color = VibeCream, style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                option.explanation,
+                                color = VibeMuted,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    }
+                }
+
+                Text("CONEXIÓN", style = MaterialTheme.typography.labelSmall, color = VibeMuted)
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { wifiOnly = true }
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(selected = wifiOnly, onClick = { wifiOnly = true })
+                    Text("Solo Wi-Fi", color = VibeCream, style = MaterialTheme.typography.bodyMedium)
+                }
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { wifiOnly = false }
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(selected = !wifiOnly, onClick = { wifiOnly = false })
+                    Text("Wi-Fi y datos móviles", color = VibeCream, style = MaterialTheme.typography.bodyMedium)
+                }
+                if (!wifiOnly) {
+                    Text(
+                        "La descarga mediante datos móviles puede consumir tu tarifa de datos y generar cargos adicionales según tu operador.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = VibeRed
+                    )
+                }
                 Text(
                     "Descarga solo contenido que tengas derecho a usar. VibeMusic no aloja audio ni extrae catálogos de plataformas de streaming.",
                     style = MaterialTheme.typography.labelSmall,
@@ -158,7 +227,17 @@ fun DownloadDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onDownload(url.trim(), title.trim(), artist.trim()) },
+                onClick = {
+                    onDownload(
+                        DownloadRequest(
+                            url = url.trim(),
+                            title = title.trim(),
+                            artist = artist.trim(),
+                            quality = quality,
+                            wifiOnly = wifiOnly
+                        )
+                    )
+                },
                 enabled = url.isNotBlank()
             ) { Text("Descargar", color = if (url.isNotBlank()) VibeRed else VibeMuted) }
         },
@@ -166,6 +245,148 @@ fun DownloadDialog(
             TextButton(onClick = onDismiss) { Text("Cancelar", color = VibeMuted) }
         }
     )
+}
+
+@Composable
+fun DownloadProgressDialog(
+    progress: DownloadProgress?,
+    onDismiss: () -> Unit,
+    onCancel: () -> Unit,
+    onRetry: () -> Unit
+) {
+    if (progress == null) return
+    val active = progress.isActive
+    AlertDialog(
+        onDismissRequest = { if (!active) onDismiss() },
+        containerColor = VibeSurfaceHigh,
+        titleContentColor = VibeCream,
+        textContentColor = VibeMuted,
+        title = {
+            Text(
+                when (progress.status) {
+                    DownloadStatus.FINISHED -> "Descarga completada"
+                    DownloadStatus.FAILED -> "Descarga interrumpida"
+                    DownloadStatus.CANCELLED -> "Descarga cancelada"
+                    else -> "Descargando audio"
+                }
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AlbumArt(
+                        title = progress.title.ifBlank { "Audio" },
+                        artworkUri = progress.artworkUrl,
+                        seed = progress.id,
+                        modifier = Modifier.size(64.dp),
+                        corner = 12.dp,
+                        showBrand = false
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            progress.displayName,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = VibeCream,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            progress.artist.ifBlank { "VibeMusic" },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = VibeMuted,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                if (active) {
+                    LinearProgressIndicator(
+                        progress = { progress.fraction },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = VibeRed,
+                        trackColor = VibeSurface
+                    )
+                    Text(
+                        "${progress.percent} % · ${formatBytes(progress.bytes)} de ${formatBytes(progress.totalBytes)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = VibeMuted
+                    )
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            "${formatBytes(progress.speedBytesPerSecond)}/s",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = VibeMuted
+                        )
+                        Text(
+                            formatEta(progress.etaMs)?.let { "Quedan $it" } ?: "Calculando…",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = VibeMuted
+                        )
+                    }
+                }
+
+                progress.error?.let { message ->
+                    Text(
+                        message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Text(
+                        "La parte descargada se conserva: al reintentar se reanuda si el servidor lo permite.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = VibeMuted
+                    )
+                }
+
+                if (progress.status == DownloadStatus.FINISHED) {
+                    Text(
+                        "${progress.displayName} ya está en tu biblioteca y se puede reproducir sin Internet.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = VibeCream
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            when {
+                active -> TextButton(onClick = onCancel) { Text("Cancelar", color = VibeRed) }
+                progress.status == DownloadStatus.FAILED ->
+                    TextButton(onClick = onRetry) { Text("Reintentar", color = VibeRed) }
+                else -> TextButton(onClick = onDismiss) { Text("Cerrar", color = VibeRed) }
+            }
+        },
+        dismissButton = if (active) {
+            null
+        } else {
+            { TextButton(onClick = onDismiss) { Text("Cerrar", color = VibeMuted) } }
+        }
+    )
+}
+
+private fun formatBytes(bytes: Long): String {
+    if (bytes <= 0L) return "0 B"
+    val units = arrayOf("B", "KB", "MB", "GB")
+    var value = bytes.toDouble()
+    var index = 0
+    while (value >= 1024.0 && index < units.lastIndex) {
+        value /= 1024.0
+        index++
+    }
+    return if (index == 0) "$bytes B"
+    else String.format(Locale.getDefault(), "%.1f %s", value, units[index])
+}
+
+private fun formatEta(etaMs: Long?): String? {
+    if (etaMs == null || etaMs <= 0L) return null
+    val seconds = (etaMs / 1000L).coerceAtLeast(1L)
+    val minutes = seconds / 60L
+    val rest = seconds % 60L
+    return if (minutes > 0) "$minutes min $rest s" else "$rest s"
 }
 
 @Composable

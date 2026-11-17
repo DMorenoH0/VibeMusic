@@ -15,11 +15,15 @@ object HttpJson {
     private const val USER_AGENT = "VibeMusic/1.2 (Android; open-source music player)"
 
     @Throws(IOException::class)
-    fun get(url: String, timeoutMs: Int = 12_000): String {
+    fun get(
+        url: String,
+        timeoutMs: Int = 12_000,
+        headers: Map<String, String> = emptyMap()
+    ): String {
         var lastError: IOException? = null
         repeat(2) { attempt ->
             try {
-                return request(url, timeoutMs)
+                return request(url, timeoutMs, headers)
             } catch (e: HttpStatusException) {
                 // 4xx means the request itself is wrong (invalid key, quota,
                 // bad query). Retrying would waste quota and never succeed.
@@ -34,7 +38,7 @@ object HttpJson {
         throw lastError ?: IOException("No se pudo conectar con el servidor.")
     }
 
-    private fun request(url: String, timeoutMs: Int): String {
+    private fun request(url: String, timeoutMs: Int, headers: Map<String, String>): String {
         val parsed = URL(url)
         if (parsed.protocol != "https") throw IOException("Solo se admiten conexiones https.")
         val connection = (parsed.openConnection() as HttpURLConnection).apply {
@@ -45,6 +49,7 @@ object HttpJson {
             setRequestProperty("User-Agent", USER_AGENT)
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Accept-Encoding", "identity")
+            headers.forEach { (name, value) -> setRequestProperty(name, value) }
         }
         try {
             val code = connection.responseCode

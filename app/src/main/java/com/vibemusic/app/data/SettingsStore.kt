@@ -28,6 +28,19 @@ class SettingsStore(context: Context) {
     private val _wifiOnly = MutableStateFlow(prefs.getBoolean("wifi_only", false))
     val wifiOnly: StateFlow<Boolean> = _wifiOnly.asStateFlow()
 
+    private val _recommendationsEnabled = MutableStateFlow(
+        prefs.getBoolean("recommendations_enabled", true)
+    )
+    val recommendationsEnabled: StateFlow<Boolean> = _recommendationsEnabled.asStateFlow()
+
+    private val _downloadQuality = MutableStateFlow(
+        com.vibemusic.app.data.download.DownloadQuality.byName(
+            prefs.getString("download_quality", null)
+        )
+    )
+    val downloadQuality: StateFlow<com.vibemusic.app.data.download.DownloadQuality> =
+        _downloadQuality.asStateFlow()
+
     private val _theme = MutableStateFlow(
         runCatching {
             VibeThemeStyle.valueOf(
@@ -64,6 +77,16 @@ class SettingsStore(context: Context) {
     fun setWifiOnly(value: Boolean) {
         prefs.edit().putBoolean("wifi_only", value).apply()
         _wifiOnly.value = value
+    }
+
+    fun setRecommendationsEnabled(value: Boolean) {
+        prefs.edit().putBoolean("recommendations_enabled", value).apply()
+        _recommendationsEnabled.value = value
+    }
+
+    fun setDownloadQuality(value: com.vibemusic.app.data.download.DownloadQuality) {
+        prefs.edit().putString("download_quality", value.name).apply()
+        _downloadQuality.value = value
     }
 
     fun setTheme(style: VibeThemeStyle) {
@@ -157,6 +180,8 @@ class SettingsStore(context: Context) {
         _amoled.value = true
         _autoScan.value = true
         _wifiOnly.value = false
+        _recommendationsEnabled.value = true
+        _downloadQuality.value = com.vibemusic.app.data.download.DownloadQuality.HIGH
         _theme.value = VibeThemeStyle.AMOLED
         _searchHistory.value = emptyList()
         _dismissedUpdateVersion.value = null

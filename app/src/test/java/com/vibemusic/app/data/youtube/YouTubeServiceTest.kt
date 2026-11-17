@@ -143,4 +143,76 @@ class YouTubeServiceTest {
         )
         assertEquals(YouTubeException.Kind.API_DISABLED, disabled.kind)
     }
+
+    @Test
+    fun `validation url spends one unit and asks for ids only`() {
+        val url = buildValidationUrl("KEY-123")
+        assertTrue(url.startsWith("https://www.googleapis.com/youtube/v3/videos?"))
+        assertTrue(url.contains("part=id"))
+        assertTrue(url.contains("fields=items/id"))
+        assertTrue(url.contains("key=KEY-123"))
+    }
+
+    @Test
+    fun `proxy search url appends an encoded query`() {
+        assertEquals(
+            "https://music.example.com/yt/search?q=Daft+Punk",
+            buildProxySearchUrl("https://music.example.com/yt/search", "Daft Punk")
+        )
+        assertEquals(
+            "https://music.example.com/search?lang=es&q=a%26b",
+            buildProxySearchUrl("https://music.example.com/search?lang=es", "a&b")
+        )
+    }
+
+    @Test
+    fun `proxy responses keep durations and reject insecure thumbnails`() {
+        val json = """
+            {"items":[
+              {"id":"dQw4w9WgXcQ","title":"Song","channel":"Artist",
+               "thumbnail":"https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+               "duration":"PT3M33S","publishedAt":"2009-10-25T06:57:33Z",
+               "description":"Official"},
+              {"id":"5NV6Rdv1a3I","title":"Other","channel":"Band",
+               "durationMs":248000,"thumbnail":"http://insecure.example/x.jpg"},
+              {"id":"bad id","title":"Ignored"}
+            ]}
+        """.trimIndent()
+        val videos = parseProxyVideos(json)
+        assertEquals(2, videos.size)
+        assertEquals(213_000L, videos[0].durationMs)
+        assertEquals(
+            "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+            videos[0].thumbnailUrl
+        )
+        assertEquals(248_000L, videos[1].durationMs)
+        assertEquals("", videos[1].thumbnailUrl)
+        assertEquals(emptyList<YouTubeVideo>(), parseProxyVideos("not json"))
+    }
+
+    @Test
+    fun `proxy errors distinguish quota from rejection`() {
+        assertEquals(
+            YouTubeException.Kind.QUOTA,
+            mapProxyError(429, """{"error":"quota"}""").kind
+        )
+        assertEquals(
+            YouTubeException.Kind.INVALID_KEY,
+            mapProxyError(403, """{"error":"blocked"}""").kind
+        )
+        assertEquals(
+            YouTubeException.Kind.NETWORK,
+            mapProxyError(500, "").kind
+        )
+    }
+
+    @Test
+    fun `service mode follows proxy and key presence`() {
+        assertEquals(YouTubeService.Mode.NONE, YouTubeService().mode)
+        assertEquals(YouTubeService.Mode.DIRECT, YouTubeService(apiKey = "key").mode)
+        assertEquals(
+            YouTubeService.Mode.PROXY,
+            YouTubeService(apiKey = "key", proxyUrl = "https://proxy.example/search").mode
+        )
+    }
 }

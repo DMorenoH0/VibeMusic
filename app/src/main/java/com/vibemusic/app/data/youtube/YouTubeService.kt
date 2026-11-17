@@ -48,15 +48,32 @@ class YouTubeException(
  * Read-only client for YouTube Data API v3. It performs one `search.list`
  * request (100 quota units) and one `videos.list` request (1 unit) per new
  * query, caches successful queries and never retries 4xx responses.
+ *
+ * Two modes are supported:
+ *  - DIRECT: the key lives in this device (typed by the user and encrypted, or
+ *    injected at build time). Requests go to Google with the Android package
+ *    and signing-certificate headers so the key can be app-restricted.
+ *  - PROXY: a trusted intermediary performs the calls. The device sends no key
+ *    at all, which is the recommended production architecture.
  */
 class YouTubeService(
-    private val apiKey: String,
+    private val apiKey: String = "",
+    private val proxyUrl: String = "",
+    private val extraHeaders: Map<String, String> = emptyMap(),
     private val fetch: (url: String, timeoutMs: Int) -> String = { url, timeout ->
-        HttpJson.get(url, timeout)
+        HttpJson.get(url, timeout, extraHeaders)
     }
 ) {
 
-    val isConfigured: Boolean get() = apiKey.isNotBlank()
+    enum class Mode { PROXY, DIRECT, NONE }
+
+    val mode: Mode = when {
+        proxyUrl.isNotBlank() -> Mode.PROXY
+        apiKey.isNotBlank() -> Mode.DIRECT
+        else -> Mode.NONE
+    }
+
+    val isConfigured: Boolean get() = mode != Mode.NONE
 
     private val cache = ResponseCache<List<YouTubeVideo>>(capacity = 16)
 
@@ -70,13 +87,29 @@ class YouTubeService(
         }
         if (!isConfigured) {
             throw YouTubeException(
-                "YouTube no está configurado. Falta la clave de YouTube Data API v3.",
+                "YouTube no está configurado. Añade tu clave de YouTube Data API v3.",
                 YouTubeException.Kind.NOT_CONFIGURED
             )
         }
 
         val cacheKey = clean.lowercase(Locale.ROOT)
         cache.get(cacheKey)?.let { return@withContext it }
+
+        if (mode == Mode.PROXY) {
+            val json = try {
+                fetch(buildProxySearchUrl(proxyUrl, clean), 15_000)
+            } catch (e: HttpStatusException) {
+                throw mapProxyError(e.statusCode, e.responseBody)
+            } catch (e: IOException) {
+                throw YouTubeException(
+                    "No se pudo conectar con el buscador de YouTube. Comprueba tu conexión.",
+                    YouTubeException.Kind.NETWORK
+                )
+            }
+            val videos = parseProxyVideos(json)
+            cache.put(cacheKey, videos)
+            return@withContext videos
+        }
 
         val searchJson = try {
             fetch(buildSearchUrl(clean, apiKey), 15_000)
@@ -111,6 +144,31 @@ class YouTubeService(
         videos
     }
 
+    /**
+     * Checks a key against `videos.list` (1 quota unit, not the 100 units of
+     * `search.list`) before it is persisted. In proxy mode there is no key to
+     * validate on the device.
+     */
+    suspend fun validate(): Unit = withContext(Dispatchers.IO) {
+        if (mode != Mode.DIRECT) return@withContext
+        val body = try {
+            fetch(buildValidationUrl(apiKey), 15_000)
+        } catch (e: HttpStatusException) {
+            throw mapYouTubeError(e.statusCode, e.responseBody)
+        } catch (e: IOException) {
+            throw YouTubeException(
+                "No se pudo comprobar la clave. Revisa tu conexión e inténtalo de nuevo.",
+                YouTubeException.Kind.NETWORK
+            )
+        }
+        if (runCatching { JSONObject(body).optJSONArray("items") }.getOrNull() == null) {
+            throw YouTubeException(
+                "YouTube devolvió una respuesta inesperada al comprobar la clave.",
+                YouTubeException.Kind.GENERIC
+            )
+        }
+    }
+
     fun clearCache() = cache.clear()
 }
 
@@ -135,6 +193,19 @@ internal fun buildVideosUrl(ids: List<String>, key: String): String {
         "&id=$encodedIds&fields=$fields&key=$encodedKey"
 }
 
+/** Cheap credential probe: 1 quota unit instead of the 100 of search.list. */
+internal fun buildValidationUrl(key: String): String {
+    val encodedKey = URLEncoder.encode(key, "UTF-8")
+    return "https://www.googleapis.com/youtube/v3/videos" +
+        "?part=id&id=M7lc1UVf-VE&fields=items/id&key=$encodedKey"
+}
+
+internal fun buildProxySearchUrl(base: String, query: String): String {
+    val clean = base.trim()
+    val separator = if (clean.contains('?')) "&" else "?"
+    return clean + separator + "q=" + URLEncoder.encode(query, "UTF-8")
+}
+
 internal fun parseSearchIds(json: String): List<String> {
     val items = runCatching { JSONObject(json).optJSONArray("items") }.getOrNull() ?: return emptyList()
     val ids = LinkedHashSet<String>()
@@ -144,6 +215,40 @@ internal fun parseSearchIds(json: String): List<String> {
         if (id.matches(Regex("[A-Za-z0-9_-]{5,20}"))) ids.add(id)
     }
     return ids.toList()
+}
+
+/**
+ * Parses the simplified response of an intermediary service:
+ * `{"items":[{"id","title","channel","thumbnail","durationMs"|"duration",
+ * "publishedAt","description"}]}`.
+ */
+internal fun parseProxyVideos(json: String): List<YouTubeVideo> {
+    val items = runCatching { JSONObject(json).optJSONArray("items") }.getOrNull()
+        ?: return emptyList()
+    val videos = ArrayList<YouTubeVideo>(items.length())
+    for (i in 0 until items.length()) {
+        val item = items.optJSONObject(i) ?: continue
+        val id = item.optString("id").ifBlank { item.optString("videoId") }
+        if (!id.matches(Regex("[A-Za-z0-9_-]{5,20}"))) continue
+        val durationFromMillis = item.optLong("durationMs", 0L).takeIf { it > 0L }
+        val duration = durationFromMillis ?: parseIsoDurationMs(item.optString("duration"))
+        val thumbnail = item.optString("thumbnail")
+            .ifBlank { item.optString("thumbnailUrl") }
+            .takeIf { it.startsWith("https://", ignoreCase = true) }
+            .orEmpty()
+        videos.add(
+            YouTubeVideo(
+                id = id,
+                title = item.optString("title").ifBlank { "Vídeo de YouTube" },
+                channel = item.optString("channel"),
+                thumbnailUrl = thumbnail,
+                durationMs = duration,
+                publishedAt = item.optString("publishedAt"),
+                description = item.optString("description")
+            )
+        )
+    }
+    return videos
 }
 
 /**
@@ -264,6 +369,27 @@ internal fun mapYouTubeError(status: Int, body: String): YouTubeException {
         else ->
             YouTubeException(
                 "YouTube respondió HTTP $status. Inténtalo más tarde.",
+                YouTubeException.Kind.NETWORK
+            )
+    }
+}
+
+internal fun mapProxyError(status: Int, body: String): YouTubeException {
+    val detail = runCatching { JSONObject(body).optString("error") }.getOrNull().orEmpty()
+    return when {
+        status == 429 || detail.contains("quota", ignoreCase = true) ->
+            YouTubeException(
+                "Se agotó la cuota diaria de YouTube Data API. Inténtalo más tarde.",
+                YouTubeException.Kind.QUOTA
+            )
+        status == 401 || status == 403 || detail.contains("blocked", ignoreCase = true) ->
+            YouTubeException(
+                "El servicio de búsqueda rechazó la solicitud. Revisa su configuración.",
+                YouTubeException.Kind.INVALID_KEY
+            )
+        else ->
+            YouTubeException(
+                "El servicio de búsqueda de YouTube respondió HTTP $status. Inténtalo más tarde.",
                 YouTubeException.Kind.NETWORK
             )
     }

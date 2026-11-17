@@ -108,8 +108,12 @@ fun LibraryScreen(
     val player by vm.playerState.collectAsStateWithLifecycle()
     val scanState by vm.scanState.collectAsStateWithLifecycle()
     val initializing by vm.initializing.collectAsStateWithLifecycle()
+    val downloadDetails by vm.downloadDetails.collectAsStateWithLifecycle()
 
     val albums = remember(tracks) { groupAlbums(tracks) }
+    val downloadSizes = remember(downloadDetails) {
+        downloadDetails.associate { it.trackId to it.sizeBytes }
+    }
     var selectedTab by rememberSaveable { mutableStateOf(0) }
 
     VibePageBackground {
@@ -173,6 +177,7 @@ fun LibraryScreen(
 
                     1 -> DownloadTab(
                         downloads = downloadedTracks,
+                        sizes = downloadSizes,
                         favoriteIds = favoriteIds,
                         currentId = player.mediaId,
                         isPlaying = player.isPlaying,
@@ -407,6 +412,7 @@ private fun DeviceTab(
 @Composable
 private fun DownloadTab(
     downloads: List<Track>,
+    sizes: Map<String, Long>,
     favoriteIds: Set<String>,
     currentId: String?,
     isPlaying: Boolean,
@@ -445,8 +451,11 @@ private fun DownloadTab(
                 isCurrent = currentId == track.id,
                 isPlaying = isPlaying,
                 caption = when {
-                    track.addedAt > 0L -> "Descargada el ${formatDate(track.addedAt)}"
-                    else -> null
+                    track.addedAt > 0L -> listOfNotNull(
+                        "Descargada el ${formatDate(track.addedAt)}",
+                        sizes[track.id]?.takeIf { it > 0L }?.let(::formatBytes)
+                    ).joinToString(" · ")
+                    else -> sizes[track.id]?.takeIf { it > 0L }?.let(::formatBytes)
                 },
                 onClick = { onPlay(track) },
                 onFavorite = { onFavorite(track) },
@@ -622,3 +631,16 @@ private fun FavoritesTab(
 
 private fun formatDate(timestamp: Long): String =
     SimpleDateFormat("d MMM yyyy", Locale.getDefault()).format(Date(timestamp))
+
+private fun formatBytes(bytes: Long): String {
+    if (bytes <= 0L) return "0 B"
+    val units = arrayOf("B", "KB", "MB", "GB")
+    var value = bytes.toDouble()
+    var index = 0
+    while (value >= 1024.0 && index < units.lastIndex) {
+        value /= 1024.0
+        index++
+    }
+    return if (index == 0) "$bytes B"
+    else String.format(Locale.getDefault(), "%.1f %s", value, units[index])
+}

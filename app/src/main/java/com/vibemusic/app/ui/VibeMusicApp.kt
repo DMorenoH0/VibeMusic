@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.vibemusic.app.audio.BluetoothAudioMonitor
 import com.vibemusic.app.data.model.Track
 import com.vibemusic.app.data.model.TrackSource
 import com.vibemusic.app.data.youtube.YouTubeVideo
@@ -41,12 +42,16 @@ import com.vibemusic.app.ui.components.UpdateDialog
 import com.vibemusic.app.ui.components.VibeBottomBar
 import com.vibemusic.app.ui.dialogs.CreatePlaylistDialog
 import com.vibemusic.app.ui.dialogs.DownloadDialog
+import com.vibemusic.app.ui.dialogs.DownloadProgressDialog
 import com.vibemusic.app.ui.dialogs.OnlineTrackActionSheet
 import com.vibemusic.app.ui.dialogs.TrackActionSheet
 import com.vibemusic.app.ui.dialogs.TransferDialog
 import com.vibemusic.app.ui.screens.AlbumDetailScreen
+import com.vibemusic.app.ui.screens.BluetoothScreen
 import com.vibemusic.app.ui.screens.CsvImportScreen
+import com.vibemusic.app.ui.screens.DownloadsScreen
 import com.vibemusic.app.ui.screens.ExploreScreen
+import com.vibemusic.app.ui.screens.ForYouScreen
 import com.vibemusic.app.ui.screens.HomeScreen
 import com.vibemusic.app.ui.screens.LegalScreen
 import com.vibemusic.app.ui.screens.LibraryScreen
@@ -111,6 +116,7 @@ fun VibeMusicApp(vm: VibeViewModel) {
     val playlists by vm.playlists.collectAsStateWithLifecycle()
     val favoriteIds by vm.favoriteIds.collectAsStateWithLifecycle()
     val transfer by vm.transfer.collectAsStateWithLifecycle()
+    val downloadProgress by vm.downloadState.collectAsStateWithLifecycle()
     val update by vm.update.collectAsStateWithLifecycle()
     val dismissedUpdate by vm.dismissedUpdateVersion.collectAsStateWithLifecycle()
 
@@ -120,6 +126,7 @@ fun VibeMusicApp(vm: VibeViewModel) {
     var youtubeVideo by rememberSaveable(stateSaver = YouTubeVideoSaver) {
         mutableStateOf<YouTubeVideo?>(null)
     }
+    var youtubeReturnRoute by rememberSaveable { mutableStateOf("youtube") }
 
     var actionTrack by remember { mutableStateOf<Track?>(null) }
     var actionPlaylistId by remember { mutableStateOf<Long?>(null) }
@@ -146,6 +153,7 @@ fun VibeMusicApp(vm: VibeViewModel) {
     // overlap; Media3 itself is not modified.
     val openYouTubePlayer: (YouTubeVideo) -> Unit = { video ->
         if (player.isPlaying) vm.togglePlayPause()
+        youtubeReturnRoute = "youtube"
         youtubeVideo = video
         route = "youtubePlayer"
     }
@@ -202,10 +210,28 @@ fun VibeMusicApp(vm: VibeViewModel) {
         }
     }
 
+    val bluetoothLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { vm.refreshBluetooth() }
+
+    val requestBluetoothPermission: () -> Unit = {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            !vm.hasBluetoothPermission()
+        ) {
+            bluetoothLauncher.launch(BluetoothAudioMonitor.bluetoothPermission())
+        } else {
+            vm.refreshBluetooth()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        vm.resumePendingDownload()
+    }
+
     BackHandler(enabled = route != null || showUpdateDialog) {
         when {
             showUpdateDialog -> showUpdateDialog = false
-            route == "youtubePlayer" -> route = "youtube"
+            route == "youtubePlayer" -> route = youtubeReturnRoute
             else -> route = null
         }
     }
@@ -231,22 +257,33 @@ fun VibeMusicApp(vm: VibeViewModel) {
                         onOpenAppSettings = openAppSettings
                     )
 
-                    1 -> SamplesScreen(
-                        vm = vm,
-                        onOpenPlayer = { route = "player" }
-                    )
-
-                    2 -> ExploreScreen(
+                    1 -> ExploreScreen(
                         vm = vm,
                         onOpenSearch = { route = "search" },
                         onOpenYouTube = { route = "youtube" },
                         onOpenAlbum = { album -> route = "album:$album" },
                         onOpenPlayer = { route = "player" },
                         onRequestPermission = requestAudioPermission,
-                        onOpenAppSettings = openAppSettings
+                        onOpenAppSettings = openAppSettings,
+                        onOpenSamples = { route = "samples" },
+                        onOpenDownloads = { route = "downloads" }
                     )
 
-                    else -> LibraryScreen(
+                    2 -> SearchScreen(
+                        vm = vm,
+                        onBack = null,
+                        autoFocus = false,
+                        onOpenPlayer = { route = "player" },
+                        onOpenAlbum = { album -> route = "album:$album" },
+                        onTrackMore = { track ->
+                            actionPlaylistId = null
+                            actionTrack = track
+                        },
+                        onOpenOnlineAlbum = { id -> route = "onlineAlbum:$id" },
+                        onOpenOnlineArtist = { id -> route = "onlineArtist:$id" }
+                    )
+
+                    3 -> LibraryScreen(
                         vm = vm,
                         onOpenPlayer = { route = "player" },
                         onTrackMore = { track ->
@@ -265,6 +302,17 @@ fun VibeMusicApp(vm: VibeViewModel) {
                         onDownload = { showDownload = true },
                         onRequestPermission = requestAudioPermission,
                         onOpenAppSettings = openAppSettings
+                    )
+
+                    else -> ForYouScreen(
+                        vm = vm,
+                        onOpenPlayer = { route = "player" },
+                        onTrackMore = { track ->
+                            actionPlaylistId = null
+                            actionTrack = track
+                        },
+                        onOpenSettings = { route = "settings" },
+                        onExplore = { tab = 1 }
                     )
                 }
             }
@@ -289,7 +337,13 @@ fun VibeMusicApp(vm: VibeViewModel) {
                     )
                 }
             }
-            VibeBottomBar(selected = tab, onSelect = { tab = it })
+            VibeBottomBar(
+                selected = tab,
+                onSelect = {
+                    tab = it
+                    route = null
+                }
+            )
         }
 
         val overlayModifier = Modifier
@@ -349,10 +403,39 @@ fun VibeMusicApp(vm: VibeViewModel) {
                     Box(overlayModifier) {
                         YouTubePlayerScreen(
                             video = video,
-                            onBack = { route = "youtube" }
+                            onBack = { route = youtubeReturnRoute }
                         )
                     }
                 }
+            }
+
+            route == "samples" -> Box(overlayModifier) {
+                SamplesScreen(
+                    vm = vm,
+                    onOpenPlayer = { route = "player" }
+                )
+            }
+
+            route == "downloads" -> Box(overlayModifier) {
+                DownloadsScreen(
+                    vm = vm,
+                    onOpenPlayer = { route = "player" },
+                    onTrackMore = { track ->
+                        actionPlaylistId = null
+                        actionTrack = track
+                    },
+                    onDownload = { showDownload = true },
+                    onImport = { importLauncher.launch(arrayOf("audio/*")) },
+                    onBack = { route = null }
+                )
+            }
+
+            route == "bluetooth" -> Box(overlayModifier) {
+                BluetoothScreen(
+                    vm = vm,
+                    onBack = { route = null },
+                    onRequestBluetoothPermission = requestBluetoothPermission
+                )
             }
 
             route == "settings" -> Box(overlayModifier) {
@@ -363,7 +446,9 @@ fun VibeMusicApp(vm: VibeViewModel) {
                     onOpenAppSettings = openAppSettings,
                     onOpenLegal = { key -> route = "legal:$key" },
                     onOpenCsv = { route = "csv" },
-                    onOpenUpdate = { showUpdateDialog = true }
+                    onOpenUpdate = { showUpdateDialog = true },
+                    onOpenBluetooth = { route = "bluetooth" },
+                    onOpenDownloads = { route = "downloads" }
                 )
             }
 
@@ -446,6 +531,12 @@ fun VibeMusicApp(vm: VibeViewModel) {
                             onTrackMore = { track ->
                                 actionPlaylistId = id
                                 actionTrack = track
+                            },
+                            onOpenYouTube = { video ->
+                                if (player.isPlaying) vm.togglePlayPause()
+                                youtubeReturnRoute = route ?: "playlist:$id"
+                                youtubeVideo = video
+                                route = "youtubePlayer"
                             }
                         )
                     }
@@ -592,12 +683,19 @@ fun VibeMusicApp(vm: VibeViewModel) {
     if (showDownload) {
         DownloadDialog(
             onDismiss = { showDownload = false },
-            onDownload = { url, title, artist ->
+            onDownload = { request ->
                 showDownload = false
-                vm.startDownload(url, title, artist)
+                vm.startDownload(request)
             }
         )
     }
+
+    DownloadProgressDialog(
+        progress = downloadProgress,
+        onDismiss = vm::dismissDownloadBanner,
+        onCancel = vm::cancelDownload,
+        onRetry = vm::retryDownload
+    )
 
     TransferDialog(
         transfer = transfer,

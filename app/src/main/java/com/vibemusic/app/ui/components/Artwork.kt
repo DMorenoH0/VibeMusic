@@ -68,6 +68,9 @@ private suspend fun loadArtwork(context: Context, uriString: String): Bitmap? =
                     return@runCatching null
                 }
                 connection.inputStream
+            } else if (uriString.startsWith("file://", ignoreCase = true)) {
+                val path = Uri.parse(uriString).path ?: return@runCatching null
+                java.io.File(path).takeIf { it.exists() }?.inputStream()
             } else {
                 context.contentResolver.openInputStream(Uri.parse(uriString))
             }

@@ -3,6 +3,100 @@
 Todas las versiones publicadas de VibeMusic. El formato sigue la idea de
 «Keep a Changelog» y las versiones usan SemVer.
 
+## [2.0.0] - 15 de noviembre de 2026
+
+### Añadido
+
+- Barra inferior de **cinco pestañas**: Inicio, Explorar, Buscar, Biblioteca y
+  Para ti, con mini reproductor persistente y portadas grandes.
+- **Para ti**: mezcla diaria estable durante el día, descubrimientos, artistas
+  similares, favoritos, lo más escuchado y novedades de tus listas, calculado
+  solo en el dispositivo con historial, saltos y preferencias. Sin red ni
+  analítica; se puede desactivar y borrar el historial desde Ajustes.
+- **Descargas autorizadas** desde enlaces HTTPS directos: calidad, solo Wi-Fi o
+  Wi-Fi y datos, aviso de consumo, progreso con portada, porcentaje, tamaño,
+  velocidad y tiempo restante, cancelación con archivo parcial y reanudación
+  HTTP `Range`, guardado en `Music/VibeMusic`, publicación en MediaStore y
+  reproducción sin conexión.
+- **Biblioteca de descargas** con portada, título, artista, duración, fecha y
+  tamaño; reproducción, añadir a una lista y eliminación segura del archivo y su
+  fila de MediaStore.
+- **Perfiles de audio por dispositivo** con tipo de salida, nombre, fabricante
+  inferido y modelo escrito a mano; 12 presets de ecualizador (Bass Boost, Deep
+  Bass, Reggaetón, Dembow, Hip-Hop, Pop, Rock, Electrónica, Vocal, Balanced,
+  Acoustic y Custom), cinco bandas reales sobre la sesión global, guardado,
+  restablecimiento y autoaplicación al conectar.
+- **Listas ampliadas**: crear, renombrar, portada desde el dispositivo
+  (copiada al almacenamiento privado de la app), eliminar, añadir canciones
+  locales, descargas, muestras y referencias de YouTube sin duplicados,
+  reordenar con subir/bajar, reproducir, aleatorio y repetir.
+- **Ajustes** organizados por categorías: reproducción, descargas, Bluetooth y
+  ecualizador, apariencia, privacidad, datos, actualizaciones y acerca de.
+- Migración de base de datos **1 → 2** que conserva canciones, favoritos,
+  historial y listas de versiones anteriores.
+
+### Cambiado
+
+- La base de datos incluye historial de escucha, perfiles de audio y descargas.
+- El reproductor muestra el título y el artista reales del archivo descargado
+  cuando el usuario no los indica y el archivo no trae metadatos.
+- La pantalla de listas muestra portada, número de canciones y duración total.
+- El ecualizador conserva el nombre del preset si no se mueven los sliders y
+  pasa a «Custom» cuando se ajustan a mano.
+- El permiso de Bluetooth se refresca al volver a la app para reflejar
+  concesiones hechas fuera de ella.
+
+### Corregido
+
+- La portada de una lista se copia al almacenamiento privado de la app, así que
+  sigue visible tras reiniciar aunque el archivo original se mueva o borre.
+
+### Pruebas
+
+- 56 pruebas unitarias en 9 suites (13 nuevas: 9 del motor de recomendaciones y
+  4 de los presets del ecualizador).
+- Verificado en emulador API 37: cinco pestañas, migración 1→2, descarga real de
+  MP3 con progreso, cancelación y reanudación, biblioteca con tamaño y
+  eliminación segura, ecualizador con Bass Boost aplicado, listas con creación,
+  renombrado, portada persistente, reordenación, reproducción y eliminación de
+  canciones.
+
+## [1.2.2] - 11 de noviembre de 2026
+
+### Añadido
+
+- Configuración de la clave de YouTube **desde la propia app**: tarjeta
+  «Conecta YouTube» y diálogo con icono de llave, campo con visibilidad
+  opcional y botón «Guardar y comprobar».
+- La clave se valida contra Google con `videos.list` (1 unidad de cuota) antes
+  de guardarse y se cifra con Android Keystore (AES-256/GCM). La clave guardada
+  tiene prioridad sobre la compilada y se puede eliminar desde la app.
+- Cabeceras `X-Android-Package` y `X-Android-Cert` (SHA-1 de la firma) en las
+  peticiones directas, para poder restringir la clave al paquete
+  `com.vibemusic.app` y al certificado de release.
+- Modo **proxy** opcional mediante `VIBE_YOUTUBE_PROXY_URL`: el APK no contiene
+  ninguna clave y las búsquedas se delegan a un servicio intermediario.
+- Tests de credenciales (precedencia, formato y máscara), del modo proxy, de la
+  validación y de las URL de búsqueda/detalles. Total: 43 tests en 7 suites.
+
+### Cambiado
+
+- `HttpJson` admite cabeceras HTTP opcionales.
+- Los textos de Ajustes y de la sección YouTube explican las tres formas de
+  configuración y ya no hablan solo del secreto de compilación.
+
+### Corregido
+
+- El icono de llave de la cabecera de YouTube ya no queda oculto por el título
+  en pantallas estrechas.
+
+### Notas
+
+- La búsqueda con resultados reales sigue pendiente de una clave válida: no hay
+  acceso a Google Cloud en el entorno de desarrollo y el repositorio no incluye
+  ninguna clave. La petición real a Google, el error de clave inexistente, el
+  error de formato y el error sin conexión sí se han ejecutado en el emulador.
+
 ## [1.2.1] - 11 de noviembre de 2026
 
 ### Añadido

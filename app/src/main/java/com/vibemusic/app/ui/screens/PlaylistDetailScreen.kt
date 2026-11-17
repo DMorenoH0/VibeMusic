@@ -1,5 +1,9 @@
 package com.vibemusic.app.ui.screens
 
+import android.content.Context
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,8 +23,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Shuffle
@@ -36,13 +43,17 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vibemusic.app.data.model.Track
+import com.vibemusic.app.data.model.TrackSource
+import com.vibemusic.app.data.youtube.YouTubeVideo
 import com.vibemusic.app.ui.components.EmptyState
 import com.vibemusic.app.ui.components.PlaylistHero
 import com.vibemusic.app.ui.components.TrackRow
@@ -54,6 +65,10 @@ import com.vibemusic.app.ui.theme.VibeMuted
 import com.vibemusic.app.ui.theme.VibeRed
 import com.vibemusic.app.ui.theme.VibeSurfaceHigh
 import com.vibemusic.app.viewmodel.VibeViewModel
+import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun PlaylistDetailScreen(
@@ -61,20 +76,36 @@ fun PlaylistDetailScreen(
     playlistId: Long,
     onBack: () -> Unit,
     onOpenPlayer: () -> Unit,
-    onTrackMore: (Track) -> Unit
+    onTrackMore: (Track) -> Unit,
+    onOpenYouTube: (YouTubeVideo) -> Unit = {}
 ) {
     val playlists by vm.playlists.collectAsStateWithLifecycle()
     val favoriteIds by vm.favoriteIds.collectAsStateWithLifecycle()
     val player by vm.playerState.collectAsStateWithLifecycle()
     val tracks by remember(playlistId) { vm.playlistTracks(playlistId) }
         .collectAsStateWithLifecycle(initialValue = emptyList())
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     val summary = playlists.firstOrNull { it.playlist.id == playlistId }
     val name = summary?.playlist?.name ?: "Lista"
     val totalDuration = tracks.sumOf { it.durationMs }
+    val playable = tracks.filter { it.source != TrackSource.YOUTUBE }
 
     var showRename by remember { mutableStateOf(false) }
     var showDelete by remember { mutableStateOf(false) }
+
+    val coverLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            val picked = uri
+            scope.launch {
+                val stored = copyPlaylistCover(context, playlistId, picked)
+                if (stored != null) vm.setPlaylistCover(playlistId, Uri.parse(stored))
+            }
+        }
+    }
 
     LaunchedEffect(playlists) {
         if (playlists.isNotEmpty() && summary == null) onBack()
@@ -91,7 +122,8 @@ fun PlaylistDetailScreen(
                 PlaylistHero(
                     name = name,
                     subtitle = "${tracks.size} ${if (tracks.size == 1) "canción" else "canciones"} · ${formatLongDuration(totalDuration)}",
-                    seed = "playlist:$playlistId"
+                    seed = "playlist:$playlistId",
+                    artworkUri = summary?.playlist?.coverUri
                 )
                 IconButton(
                     onClick = onBack,
@@ -119,8 +151,8 @@ fun PlaylistDetailScreen(
             ) {
                 Surface(
                     onClick = {
-                        if (tracks.isNotEmpty()) {
-                            vm.playQueue(tracks, shuffled = false)
+                        if (playable.isNotEmpty()) {
+                            vm.playQueue(playable, shuffled = false)
                             onOpenPlayer()
                         }
                     },
@@ -143,8 +175,8 @@ fun PlaylistDetailScreen(
                 }
                 Surface(
                     onClick = {
-                        if (tracks.isNotEmpty()) {
-                            vm.playQueue(tracks, shuffled = true)
+                        if (playable.isNotEmpty()) {
+                            vm.playQueue(playable, shuffled = true)
                             onOpenPlayer()
                         }
                     },
@@ -175,6 +207,20 @@ fun PlaylistDetailScreen(
                     )
                 }
                 Surface(
+                    onClick = { coverLauncher.launch(arrayOf("image/*")) },
+                    shape = RoundedCornerShape(50),
+                    color = VibeSurfaceHigh
+                ) {
+                    Icon(
+                        Icons.Rounded.Image,
+                        contentDescription = "Cambiar portada",
+                        tint = VibeCream,
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                            .size(18.dp)
+                    )
+                }
+                Surface(
                     onClick = { showDelete = true },
                     shape = RoundedCornerShape(50),
                     color = VibeSurfaceHigh
@@ -196,25 +242,60 @@ fun PlaylistDetailScreen(
                 EmptyState(
                     icon = Icons.Rounded.QueueMusic,
                     title = "Esta lista está vacía",
-                    message = "Añade canciones desde el menú «⋯» de cualquier pista, en cualquier parte de la app.",
+                    message = "Añade canciones desde el menú «⋯» de cualquier pista, o vídeos desde YouTube.",
                     actionLabel = "Volver",
                     onAction = onBack
                 )
             }
         } else {
             items(tracks, key = { it.id }) { track ->
-                TrackRow(
-                    track = track,
-                    isFavorite = track.id in favoriteIds,
-                    isCurrent = player.mediaId == track.id,
-                    isPlaying = player.isPlaying,
-                    onClick = {
-                        vm.playFromList(tracks, track)
-                        onOpenPlayer()
-                    },
-                    onFavorite = { vm.toggleFavorite(track) },
-                    onMore = { onTrackMore(track) }
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TrackRow(
+                        track = track,
+                        modifier = Modifier.weight(1f),
+                        isFavorite = track.id in favoriteIds,
+                        isCurrent = player.mediaId == track.id,
+                        isPlaying = player.isPlaying,
+                        onClick = {
+                            if (track.source == TrackSource.YOUTUBE) {
+                                onOpenYouTube(track.toYouTubeVideo())
+                            } else {
+                                vm.playFromList(playable, track)
+                                onOpenPlayer()
+                            }
+                        },
+                        onFavorite = { vm.toggleFavorite(track) },
+                        onMore = { onTrackMore(track) }
+                    )
+                    Column {
+                        IconButton(
+                            onClick = {
+                                vm.movePlaylistTrack(playlistId, track.id, -1)
+                            },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                Icons.Rounded.ArrowUpward,
+                                contentDescription = "Subir",
+                                tint = VibeMuted,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        IconButton(
+                            onClick = {
+                                vm.movePlaylistTrack(playlistId, track.id, 1)
+                            },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                Icons.Rounded.ArrowDownward,
+                                contentDescription = "Bajar",
+                                tint = VibeMuted,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
             }
             item {
                 Text(
@@ -267,3 +348,37 @@ fun PlaylistDetailScreen(
         )
     }
 }
+
+private fun Track.toYouTubeVideo() = YouTubeVideo(
+    id = id.removePrefix("youtube:"),
+    title = title,
+    channel = artist,
+    thumbnailUrl = artworkUri.orEmpty(),
+    durationMs = durationMs
+)
+
+/**
+ * Copies the picked image into the app's private storage so the cover keeps
+ * working after reboots and even if the original document is moved or deleted.
+ */
+private suspend fun copyPlaylistCover(context: Context, playlistId: Long, uri: Uri): String? =
+    withContext(Dispatchers.IO) {
+        runCatching {
+            val dir = File(context.filesDir, "playlist-covers").apply { mkdirs() }
+            val target = File(dir, "cover-$playlistId-${System.currentTimeMillis()}.img")
+            val input = context.contentResolver.openInputStream(uri) ?: return@runCatching null
+            input.use { source ->
+                target.outputStream().use { output -> source.copyTo(output, 64 * 1024) }
+            }
+            if (target.length() <= 0L) {
+                target.delete()
+                return@runCatching null
+            }
+            dir.listFiles { file ->
+                file.name.startsWith("cover-$playlistId-") && file != target
+            }?.forEach { old -> old.delete() }
+            Uri.fromFile(target).toString()
+        }.getOrNull()
+    }
+
+

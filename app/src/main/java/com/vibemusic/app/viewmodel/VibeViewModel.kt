@@ -5,6 +5,10 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.vibemusic.app.BuildConfig
+import com.vibemusic.app.audio.AudioProfileStore
+import com.vibemusic.app.audio.BluetoothAudioMonitor
+import com.vibemusic.app.audio.EqPresets
+import com.vibemusic.app.audio.EqualizerController
 import com.vibemusic.app.data.MusicRepository
 import com.vibemusic.app.data.ScanState
 import com.vibemusic.app.data.SettingsStore
@@ -20,9 +24,19 @@ import com.vibemusic.app.data.csv.extractRecords
 import com.vibemusic.app.data.csv.guessMapping
 import com.vibemusic.app.data.csv.matchRecords
 import com.vibemusic.app.data.csv.parseCsv
+import com.vibemusic.app.data.db.ListeningEventEntity
+import com.vibemusic.app.data.db.DownloadEntity
 import com.vibemusic.app.data.db.PlaylistWithCount
+import com.vibemusic.app.data.download.DownloadBus
+import com.vibemusic.app.data.download.DownloadProgress
+import com.vibemusic.app.data.download.DownloadQuality
+import com.vibemusic.app.data.download.DownloadRequest
+import com.vibemusic.app.data.download.DownloadService
 import com.vibemusic.app.data.model.Track
 import com.vibemusic.app.data.model.TrackSource
+import com.vibemusic.app.data.recommend.ListeningSignal
+import com.vibemusic.app.data.recommend.RecommendationEngine
+import com.vibemusic.app.data.recommend.RecommendationSection
 import com.vibemusic.app.data.online.DeezerService
 import com.vibemusic.app.data.online.OnlineAlbum
 import com.vibemusic.app.data.online.OnlineApiException
@@ -34,7 +48,10 @@ import com.vibemusic.app.data.update.UpdateDownloadState
 import com.vibemusic.app.data.update.UpdateException
 import com.vibemusic.app.data.update.UpdateInstaller
 import com.vibemusic.app.data.update.isNewerVersion
+import com.vibemusic.app.data.youtube.YouTubeApiHeaders
+import com.vibemusic.app.data.youtube.YouTubeCredentials
 import com.vibemusic.app.data.youtube.YouTubeException
+import com.vibemusic.app.data.youtube.YouTubeKeyStore
 import com.vibemusic.app.data.youtube.YouTubeService
 import com.vibemusic.app.data.youtube.YouTubeVideo
 import com.vibemusic.app.playback.PlayerController
@@ -67,6 +84,28 @@ data class TransferState(
     val finishedTitle: String? = null
 )
 
+/**
+ * Snapshot of the Bluetooth output and the equalisation state. Kept as one
+ * state object so the UI cannot show a profile that does not belong to the
+ * device currently connected.
+ */
+data class EqUiState(
+    val available: Boolean = false,
+    val message: String? = null,
+    val bands: List<EqualizerController.Band> = emptyList(),
+    val presetName: String = "Balanced",
+    val gainsDb: List<Float> = List(EqPresets.anchorsHz.size) { 0f },
+    val enabled: Boolean = false,
+    val autoApply: Boolean = false,
+    val activeDeviceKey: String? = null,
+    val activeDeviceName: String? = null,
+    val activeDeviceKind: String? = null,
+    val manufacturer: String? = null,
+    val manufacturerInferred: Boolean = false,
+    val codec: String? = null,
+    val profiles: List<AudioProfileStore.DeviceProfile> = emptyList()
+)
+
 data class OnlineSearchState(
     val query: String = "",
     val loading: Boolean = false,
@@ -94,6 +133,12 @@ data class YouTubeSearchState(
     val error: String? = null,
     val searched: Boolean = false,
     val configured: Boolean = false
+)
+
+data class YouTubeKeyState(
+    val checking: Boolean = false,
+    val success: Boolean = false,
+    val error: String? = null
 )
 
 data class UpdateUiState(
@@ -137,6 +182,17 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     private val releases = GitHubReleaseService()
     private val installer = UpdateInstaller(application)
     private val googleAuth = GoogleAuthManager(application)
+    private val audioProfiles = AudioProfileStore(application)
+    private val bluetoothMonitor = BluetoothAudioMonitor(application)
+
+    private val _eq = MutableStateFlow(EqUiState())
+    val eqState: StateFlow<EqUiState> = _eq.asStateFlow()
+
+    val bluetoothOutput: StateFlow<BluetoothAudioMonitor.AudioOutput?> = bluetoothMonitor.output
+
+    val downloadState: StateFlow<DownloadProgress?> = DownloadBus.state
+    val recommendationsEnabled: StateFlow<Boolean> = settings.recommendationsEnabled
+    val downloadQuality: StateFlow<DownloadQuality> = settings.downloadQuality
 
     val playerState: StateFlow<PlayerUiState> = PlayerController.state
     val queue: StateFlow<List<QueueItem>> = PlayerController.queue
@@ -186,6 +242,34 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
     val downloads: StateFlow<List<Track>> = repository.downloads
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Raw download rows so the library can show size and download date. */
+    val downloadDetails: StateFlow<List<DownloadEntity>> = repository.downloadEntities
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * "Para ti" is computed on-device from listening history, favourites,
+     * playlists and the local catalogue. It never performs network requests and
+     * returns an empty list when the user disables recommendations.
+     */
+    val forYouSections: StateFlow<List<RecommendationSection>> = combine(
+        repository.listeningEvents,
+        favorites,
+        allTracks,
+        repository.allPlaylistTracksFlow,
+        settings.recommendationsEnabled
+    ) { events, favouriteTracks, catalog, playlistTracks, enabled ->
+        if (!enabled) {
+            emptyList()
+        } else {
+            RecommendationEngine.buildSections(
+                signals = events.map { it.toSignal() },
+                favorites = favouriteTracks,
+                catalog = catalog,
+                playlistTracks = playlistTracks
+            )
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Cache of online previews so the player/mini-player can show full metadata. */
     private val onlineCache = MutableStateFlow<Map<String, Track>>(emptyMap())
@@ -244,7 +328,11 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     private val _onlineArtist = MutableStateFlow(OnlineArtistState())
     val onlineArtist: StateFlow<OnlineArtistState> = _onlineArtist.asStateFlow()
 
-    private val youTube = YouTubeService(BuildConfig.YOUTUBE_API_KEY)
+    private val youtubeKeyStore = YouTubeKeyStore(application)
+    private val youtubeHeaders = YouTubeApiHeaders.from(application)
+    private var youTube = createYouTubeService()
+    private val _youtubeKeyState = MutableStateFlow(YouTubeKeyState())
+    val youtubeKeyState: StateFlow<YouTubeKeyState> = _youtubeKeyState.asStateFlow()
     private val _youtubeQuery = MutableStateFlow("")
     val youtubeQuery: StateFlow<String> = _youtubeQuery.asStateFlow()
     private val _youtubeSearch = MutableStateFlow(
@@ -255,6 +343,17 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     private var lastYouTubeQuery = ""
 
     val youtubeConfigured: Boolean get() = youTube.isConfigured
+    val youtubeKeyStored: Boolean get() = youtubeKeyStore.hasStoredKey()
+    val youtubeUsesProxy: Boolean get() = youTube.mode == YouTubeService.Mode.PROXY
+
+    private fun createYouTubeService(): YouTubeService {
+        val key = YouTubeCredentials.resolve(BuildConfig.YOUTUBE_API_KEY, youtubeKeyStore.load())
+        return YouTubeService(
+            apiKey = key,
+            proxyUrl = BuildConfig.YOUTUBE_PROXY_URL,
+            extraHeaders = youtubeHeaders
+        )
+    }
 
     private val _update = MutableStateFlow(UpdateUiState())
     val update: StateFlow<UpdateUiState> = _update.asStateFlow()
@@ -295,6 +394,8 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
         }
+        observeListening()
+        startAudioMonitoring()
         _update.update { it.copy(installPermission = installer.canRequestInstall()) }
         viewModelScope.launch {
             delay(2_500)
@@ -424,6 +525,54 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun playlistTracks(id: Long) = repository.observePlaylistTracks(id)
 
+    fun setPlaylistCover(id: Long, uri: Uri?) {
+        viewModelScope.launch {
+            repository.setPlaylistCover(id, uri?.toString())
+            notify(if (uri == null) "Portada restablecida" else "Portada actualizada")
+        }
+    }
+
+    fun movePlaylistTrack(playlistId: Long, trackId: String, delta: Int) {
+        viewModelScope.launch { repository.movePlaylistTrack(playlistId, trackId, delta) }
+    }
+
+    /** Adds a YouTube reference to a playlist. It never downloads the video. */
+    fun addYouTubeToPlaylist(playlistId: Long, video: YouTubeVideo) {
+        viewModelScope.launch {
+            when (repository.addToPlaylist(playlistId, video.toTrackReference())) {
+                MusicRepository.AddResult.Added -> notify("Vídeo añadido a la lista")
+                MusicRepository.AddResult.AlreadyThere -> notify("Ese vídeo ya está en la lista")
+            }
+        }
+    }
+
+    fun createPlaylistWithYouTube(
+        name: String,
+        video: YouTubeVideo,
+        onCreated: (Long) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val id = repository.createPlaylist(name)
+            when (repository.addToPlaylist(id, video.toTrackReference())) {
+                MusicRepository.AddResult.Added -> notify("Lista creada con el vídeo")
+                MusicRepository.AddResult.AlreadyThere -> notify("Lista creada")
+            }
+            onCreated(id)
+        }
+    }
+
+    private fun YouTubeVideo.toTrackReference() = Track(
+        id = "youtube:$id",
+        uri = watchUrl,
+        title = title,
+        artist = channel,
+        album = "YouTube",
+        durationMs = durationMs,
+        artworkUri = thumbnailUrl,
+        source = TrackSource.YOUTUBE,
+        addedAt = System.currentTimeMillis()
+    )
+
     // ---------------- Online search ----------------
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
@@ -551,6 +700,56 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun retryYouTubeSearch() {
         submitYouTubeSearch(_youtubeSearch.value.query.ifBlank { _youtubeQuery.value })
+    }
+
+    /**
+     * Validates a key against Google with a 1-unit request and only stores it
+     * when the API accepts it. The key is encrypted with Android Keystore and
+     * is never logged.
+     */
+    fun saveYouTubeApiKey(raw: String) {
+        val key = raw.trim()
+        if (!YouTubeCredentials.isWellFormed(key)) {
+            _youtubeKeyState.value = YouTubeKeyState(
+                error = "La clave no tiene un formato válido. Pega la clave completa " +
+                    "de Google Cloud (normalmente empieza por AIza)."
+            )
+            return
+        }
+        viewModelScope.launch {
+            _youtubeKeyState.value = YouTubeKeyState(checking = true)
+            val candidate = YouTubeService(key, "", youtubeHeaders)
+            try {
+                candidate.validate()
+                youtubeKeyStore.save(key)
+                youTube = candidate
+                _youtubeSearch.value = _youtubeSearch.value.copy(configured = true)
+                lastYouTubeQuery = ""
+                _youtubeKeyState.value = YouTubeKeyState(success = true)
+                notify("Clave de YouTube verificada y guardada en este dispositivo.")
+            } catch (e: YouTubeException) {
+                _youtubeKeyState.value = YouTubeKeyState(
+                    error = e.message ?: "No se pudo verificar la clave."
+                )
+            } catch (e: Exception) {
+                _youtubeKeyState.value = YouTubeKeyState(
+                    error = "No se pudo verificar la clave. Comprueba tu conexión."
+                )
+            }
+        }
+    }
+
+    fun clearYouTubeApiKey() {
+        youtubeKeyStore.clear()
+        youTube = createYouTubeService()
+        lastYouTubeQuery = ""
+        _youtubeKeyState.value = YouTubeKeyState()
+        _youtubeSearch.value = _youtubeSearch.value.copy(configured = youTube.isConfigured)
+        notify("Clave de YouTube eliminada del dispositivo.")
+    }
+
+    fun dismissYouTubeKeyState() {
+        _youtubeKeyState.value = YouTubeKeyState()
     }
 
     private suspend fun runYouTubeSearch(query: String) {
@@ -919,6 +1118,215 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // ---------------- Equalizer / Bluetooth ----------------
+    private fun startAudioMonitoring() {
+        bluetoothMonitor.start()
+        EqualizerController.ensureReady()
+        _eq.value = _eq.value.copy(
+            available = EqualizerController.available,
+            message = EqualizerController.message,
+            bands = EqualizerController.bands(),
+            autoApply = audioProfiles.autoApply,
+            gainsDb = audioProfiles.customGains,
+            profiles = audioProfiles.profiles().values.toList()
+        )
+        viewModelScope.launch {
+            bluetoothMonitor.output.collect { output ->
+                _eq.update {
+                    it.copy(
+                        activeDeviceKey = output?.key,
+                        activeDeviceName = output?.name,
+                        activeDeviceKind = output?.kind,
+                        manufacturer = output?.manufacturer,
+                        manufacturerInferred = output?.manufacturerInferred == true,
+                        codec = output?.codec
+                    )
+                }
+                val device = output ?: return@collect
+                val profile = audioProfiles.profileFor(device.key) ?: return@collect
+                _eq.update {
+                    it.copy(presetName = profile.presetName, gainsDb = profile.gainsDb)
+                }
+                if (audioProfiles.autoApply && EqualizerController.available) {
+                    if (EqualizerController.apply(profile.gainsDb)) {
+                        _eq.update { it.copy(enabled = true) }
+                    }
+                }
+            }
+        }
+    }
+
+    fun applyEqPreset(name: String) {
+        val preset = EqPresets.byName(name)
+        applyEqGains(preset.gainsDb, preset.name)
+    }
+
+    fun applyEqGains(gainsDb: List<Float>, presetName: String = "Custom") {
+        val clamped = if (gainsDb.size == EqPresets.anchorsHz.size) {
+            gainsDb.map { it.coerceIn(-12f, 12f) }
+        } else {
+            List(EqPresets.anchorsHz.size) { 0f }
+        }
+        val applied = EqualizerController.apply(clamped)
+        if (!applied) {
+            _eq.update {
+                it.copy(
+                    presetName = presetName,
+                    gainsDb = clamped,
+                    enabled = false,
+                    message = EqualizerController.message
+                        ?: "Este dispositivo no permite aplicar el ecualizador global."
+                )
+            }
+            notify("Ajuste guardado, pero el dispositivo no expone un ecualizador global.")
+            return
+        }
+        if (presetName == "Custom") audioProfiles.customGains = clamped
+        val device = _eq.value.activeDeviceKey
+        if (device != null) {
+            audioProfiles.saveProfile(device, presetName, clamped, _eq.value.autoApply)
+        }
+        _eq.update {
+            it.copy(
+                presetName = presetName,
+                gainsDb = clamped,
+                enabled = true,
+                message = null,
+                profiles = audioProfiles.profiles().values.toList()
+            )
+        }
+        notify("Ecualización aplicada: $presetName")
+    }
+
+    fun setEqEnabled(enabled: Boolean) {
+        EqualizerController.setEnabled(enabled)
+        _eq.update { it.copy(enabled = enabled) }
+    }
+
+    fun setEqAutoApply(enabled: Boolean) {
+        audioProfiles.autoApply = enabled
+        _eq.update { it.copy(autoApply = enabled) }
+        if (enabled) {
+            val device = _eq.value.activeDeviceKey
+            val profile = device?.let { audioProfiles.profileFor(it) }
+            if (profile != null && EqualizerController.available) {
+                if (EqualizerController.apply(profile.gainsDb)) {
+                    _eq.update { it.copy(enabled = true, presetName = profile.presetName) }
+                }
+            }
+        }
+    }
+
+    fun saveEqForActiveDevice() {
+        val device = _eq.value.activeDeviceKey
+        if (device == null) {
+            notify("Conecta unos auriculares o un altavoz para guardar su perfil.")
+            return
+        }
+        audioProfiles.saveProfile(
+            device,
+            _eq.value.presetName,
+            _eq.value.gainsDb,
+            _eq.value.autoApply
+        )
+        _eq.update { it.copy(profiles = audioProfiles.profiles().values.toList()) }
+        notify("Perfil guardado para ${_eq.value.activeDeviceName ?: device}")
+    }
+
+    fun removeEqProfile(deviceKey: String) {
+        audioProfiles.removeProfile(deviceKey)
+        _eq.update { it.copy(profiles = audioProfiles.profiles().values.toList()) }
+        notify("Perfil eliminado")
+    }
+
+    fun resetEq() {
+        val flat = List(EqPresets.anchorsHz.size) { 0f }
+        EqualizerController.setEnabled(false)
+        audioProfiles.customGains = flat
+        _eq.update {
+            it.copy(
+                presetName = "Balanced",
+                gainsDb = flat,
+                enabled = false
+            )
+        }
+        notify("Ecualizador restablecido")
+    }
+
+    fun refreshBluetooth() = bluetoothMonitor.refresh()
+
+    fun hasBluetoothPermission(): Boolean =
+        BluetoothAudioMonitor.hasBluetoothPermission(getApplication())
+
+    fun setDeviceModel(model: String) {
+        val device = _eq.value.activeDeviceKey
+        if (device == null) {
+            notify("Conecta unos auriculares o un altavoz para asociarle un modelo.")
+            return
+        }
+        audioProfiles.setDeviceModel(device, model)
+        _eq.update { it.copy(profiles = audioProfiles.profiles().values.toList()) }
+        notify("Modelo guardado para este dispositivo")
+    }
+
+    // ---------------- Listening history (local) ----------------
+    private fun observeListening() {
+        viewModelScope.launch {
+            var active: Track? = null
+            var maxPosition = 0L
+            var duration = 0L
+            playerState.collect { state ->
+                val id = state.mediaId
+                val track = id?.let { mediaId ->
+                    allTracks.value.firstOrNull { it.id == mediaId }
+                        ?: onlineCache.value[mediaId]
+                }
+                if (track == null) {
+                    persistListening(active, maxPosition, duration)
+                    active = null
+                    maxPosition = 0L
+                    duration = 0L
+                    return@collect
+                }
+                if (active?.id != track.id) {
+                    persistListening(active, maxPosition, duration)
+                    active = track
+                    maxPosition = 0L
+                    duration = if (state.durationMs > 0) state.durationMs else track.durationMs
+                } else if (state.durationMs > 0) {
+                    duration = state.durationMs
+                }
+                if (state.positionMs > maxPosition) maxPosition = state.positionMs
+            }
+        }
+    }
+
+    private fun persistListening(track: Track?, positionMs: Long, durationMs: Long) {
+        if (track == null) return
+        if (track.source == TrackSource.ONLINE || track.source == TrackSource.YOUTUBE) return
+        if (positionMs < 5_000) return
+        val knownDuration = if (durationMs > 0) durationMs else track.durationMs
+        val completed = knownDuration > 0 && positionMs >= knownDuration - 5_000
+        val skipped = !completed && knownDuration > 0 && positionMs < knownDuration / 2
+        viewModelScope.launch {
+            repository.recordListening(track, positionMs, skipped, completed)
+        }
+    }
+
+    private fun ListeningEventEntity.toSignal() = ListeningSignal(
+        trackId = trackId,
+        title = title,
+        artist = artist,
+        genre = genre,
+        source = source,
+        artworkUri = artworkUri,
+        durationMs = durationMs,
+        playedAt = playedAt,
+        skipped = skipped,
+        completed = completed,
+        positionMs = positionMs
+    )
+
     // ---------------- Library scanning ----------------
     fun hasAudioPermission(): Boolean = repository.hasAudioPermission()
 
@@ -950,30 +1358,46 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // ---------------- Downloads / imports ----------------
-    fun startDownload(url: String, title: String, artist: String) {
-        if (_transfer.value.isWorking) return
-        viewModelScope.launch {
-            _transfer.value = TransferState(visible = true, isWorking = true)
-            try {
-                val track = repository.download(url, title, artist) { progress ->
-                    _transfer.update { it.copy(progress = progress) }
-                }
-                _transfer.value = TransferState(
-                    visible = true,
-                    isWorking = false,
-                    progress = 1f,
-                    finishedTitle = track.title
-                )
-                notify("Descarga completa: ${track.title}")
-            } catch (e: Exception) {
-                _transfer.update {
-                    it.copy(
-                        isWorking = false,
-                        error = e.message ?: "No se pudo descargar el archivo."
-                    )
-                }
-            }
+    /**
+     * Starts an authorized direct download in a foreground service so it keeps
+     * running when the activity is backgrounded. Progress is exposed through
+     * [downloadState]; the request survives process death and resumes with an
+     * HTTP Range request.
+     */
+    fun startDownload(request: DownloadRequest) {
+        val current = DownloadBus.state.value
+        if (current?.isActive == true) {
+            notify("Ya hay una descarga en curso. Espera o cancélala.")
+            return
         }
+        DownloadService.start(getApplication(), request)
+    }
+
+    fun cancelDownload() {
+        DownloadService.cancel(getApplication())
+    }
+
+    fun retryDownload() {
+        if (DownloadBus.lastRequest == null && DownloadBus.loadPending(getApplication()) == null) {
+            notify("No hay ninguna descarga pendiente que reintentar.")
+            return
+        }
+        DownloadService.retry(getApplication())
+    }
+
+    fun resumePendingDownload() {
+        DownloadService.resumePending(getApplication())
+    }
+
+    fun dismissDownloadBanner() {
+        if (DownloadBus.state.value?.isActive != true) DownloadBus.clear()
+    }
+
+    fun setDownloadQuality(quality: DownloadQuality) = settings.setDownloadQuality(quality)
+
+    fun setRecommendationsEnabled(enabled: Boolean) {
+        settings.setRecommendationsEnabled(enabled)
+        notify(if (enabled) "Recomendaciones activadas" else "Recomendaciones desactivadas")
     }
 
     fun importDocument(uri: Uri, displayName: String?) {
@@ -1053,6 +1477,13 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun clearListeningHistory() {
+        viewModelScope.launch {
+            repository.clearListeningHistory()
+            notify("Historial de escucha borrado")
+        }
+    }
+
     fun setAmoled(enabled: Boolean) = repository.setAmoled(enabled)
     fun setAutoScan(enabled: Boolean) = repository.setAutoScan(enabled)
     fun setWifiOnly(enabled: Boolean) = repository.setWifiOnly(enabled)
@@ -1083,6 +1514,13 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 val removed = repository.wipeUserData(deleteAppAudio)
+                audioProfiles.clear()
+                DownloadBus.clear()
+                DownloadBus.clearPending(getApplication())
+                _eq.value = EqUiState(
+                    available = EqualizerController.available,
+                    message = EqualizerController.message
+                )
                 _csvImport.value = CsvImportState()
                 _onlineSearch.value = OnlineSearchState()
                 _searchQuery.value = ""
@@ -1123,6 +1561,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
     override fun onCleared() {
         super.onCleared()
+        bluetoothMonitor.stop()
         sleepJob?.cancel()
         onlineSearchJob?.cancel()
         youtubeSearchJob?.cancel()
