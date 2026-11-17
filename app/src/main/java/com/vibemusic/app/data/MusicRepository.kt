@@ -184,7 +184,7 @@ class MusicRepository(context: Context, val settings: SettingsStore) {
         onProgress: (AudioDownloader.ProgressUpdate) -> Unit
     ): Track = withContext(Dispatchers.IO) {
         val fetched = downloader.download(request, onProgress)
-        storeFetched(fetched, TrackSource.DOWNLOAD, request.url)
+        storeFetched(fetched, TrackSource.DOWNLOAD, request.trackId ?: request.url)
     }
 
     suspend fun importDocument(uri: Uri, displayName: String?): Track = withContext(Dispatchers.IO) {

@@ -11,6 +11,7 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import com.vibemusic.app.data.download.DownloadRequest
+import com.vibemusic.app.data.download.ProceduralCover
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -65,6 +66,9 @@ class AudioDownloader(private val context: Context) {
         onProgress: (ProgressUpdate) -> Unit
     ): FetchedAudio = withContext(Dispatchers.IO) {
         val trimmed = request.url.trim()
+        if (request.localCopy || trimmed.startsWith("file:", ignoreCase = true)) {
+            return@withContext downloadLocalCopy(request, onProgress)
+        }
         if (trimmed.isEmpty()) throw AudioException("Introduce una URL de audio directa.")
         val url = try {
             URL(trimmed)
@@ -91,7 +95,7 @@ class AudioDownloader(private val context: Context) {
             readTimeout = 45_000
             instanceFollowRedirects = true
             requestMethod = "GET"
-            setRequestProperty("User-Agent", "VibeMusic/2.0 (Android; authorized audio download)")
+            setRequestProperty("User-Agent", "VibeMusic/2.1 (Android; authorized audio download)")
             setRequestProperty("Accept", "audio/*,application/octet-stream,*/*")
             setRequestProperty("Accept-Encoding", "identity")
             if (resumeFrom > 0) setRequestProperty("Range", "bytes=$resumeFrom-")
@@ -203,6 +207,98 @@ class AudioDownloader(private val context: Context) {
             )
         } finally {
             connection.disconnect()
+        }
+    }
+
+    /**
+     * Publishes an authorised copy that already lives inside VibeMusic (the
+     * bundled original samples) to the download library. The file is copied,
+     * its metadata is preserved, the procedural cover is written as a real
+     * image and MediaStore receives the finished entry. No network is touched.
+     */
+    private suspend fun downloadLocalCopy(
+        request: DownloadRequest,
+        onProgress: (ProgressUpdate) -> Unit
+    ): FetchedAudio = withContext(Dispatchers.IO) {
+        val uri = Uri.parse(request.url.trim())
+        if (uri.scheme != "file") {
+            throw AudioException("La canción no tiene un archivo autorizado válido.")
+        }
+        val source = File(uri.path.orEmpty())
+        if (!source.exists() || source.length() <= 0L) {
+            throw AudioException("El archivo original ya no está disponible. Vuelve a abrir la app.")
+        }
+        val appRoot = context.filesDir.canonicalFile
+        val canonical = source.canonicalFile
+        if (!canonical.path.startsWith(appRoot.path + File.separator)) {
+            throw AudioException("Solo se copian archivos gestionados por VibeMusic.")
+        }
+        val total = canonical.length()
+        val temp = File(context.cacheDir, "local-${UUID.randomUUID()}.tmp")
+        try {
+            var copied = 0L
+            val startedAt = System.currentTimeMillis()
+            var lastReport = 0L
+            canonical.inputStream().use { input ->
+                temp.outputStream().use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    var read: Int
+                    while (input.read(buffer).also { read = it } > 0) {
+                        currentCoroutineContext().ensureActive()
+                        copied += read
+                        output.write(buffer, 0, read)
+                        val now = System.currentTimeMillis()
+                        if (now - lastReport >= 150 || copied >= total) {
+                            lastReport = now
+                            reportProgress(copied, total, startedAt, 0L, onProgress)
+                        }
+                    }
+                }
+            }
+            reportProgress(copied, total, startedAt, 0L, onProgress)
+            if (copied <= 0L) throw AudioException("No se pudo copiar el archivo de audio.")
+            val metadata = readMetadata(temp)
+            val extension = canonical.extension.lowercase().ifBlank { "wav" }
+            val title = request.title.trim().ifBlank {
+                metadata.title?.trim().orEmpty().ifBlank { canonical.nameWithoutExtension }
+            }
+            val artist = request.artist.trim().ifBlank {
+                metadata.artist?.trim().orEmpty().ifBlank { "VibeMusic" }
+            }
+            val album = request.album.trim().ifBlank {
+                metadata.album?.trim().orEmpty().ifBlank { "Descargas" }
+            }
+            val artwork = saveArtwork(
+                request.artworkUrl,
+                temp,
+                "local:${request.trackId ?: canonical.absolutePath}"
+            ) ?: ProceduralCover.ensure(
+                context,
+                request.trackId ?: canonical.absolutePath,
+                title
+            )
+            val mime = mimeFor(extension)
+            val stored = publish(temp, title, artist, album, metadata.durationMs, mime, extension)
+            temp.delete()
+            FetchedAudio(
+                uri = stored.first,
+                title = title,
+                artist = artist,
+                album = album,
+                durationMs = metadata.durationMs,
+                mime = mime,
+                sizeBytes = stored.second,
+                artworkUri = artwork,
+                fileName = stored.third
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: AudioException) {
+            temp.delete()
+            throw e
+        } catch (e: Exception) {
+            temp.delete()
+            throw AudioException("No se pudo guardar la canción: ${e.message ?: "error desconocido"}")
         }
     }
 
@@ -389,7 +485,7 @@ class AudioDownloader(private val context: Context) {
                     connectTimeout = 12_000
                     readTimeout = 20_000
                     instanceFollowRedirects = true
-                    setRequestProperty("User-Agent", "VibeMusic/2.0 (Android)")
+                    setRequestProperty("User-Agent", "VibeMusic/2.1 (Android)")
                     setRequestProperty("Accept", "image/*")
                 }
                 try {

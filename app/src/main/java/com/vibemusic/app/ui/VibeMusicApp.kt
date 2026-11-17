@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,10 +34,14 @@ import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vibemusic.app.audio.BluetoothAudioMonitor
+import com.vibemusic.app.data.download.SongDownloadResolver
 import com.vibemusic.app.data.model.Track
 import com.vibemusic.app.data.model.TrackSource
 import com.vibemusic.app.data.youtube.YouTubeVideo
+import com.vibemusic.app.ui.components.LocalTrackDownloadUi
 import com.vibemusic.app.ui.components.MiniPlayer
+import com.vibemusic.app.ui.components.TrackDownloadStatus
+import com.vibemusic.app.ui.components.TrackDownloadUi
 import com.vibemusic.app.ui.components.UpdateBanner
 import com.vibemusic.app.ui.components.UpdateDialog
 import com.vibemusic.app.ui.components.VibeBottomBar
@@ -117,6 +122,8 @@ fun VibeMusicApp(vm: VibeViewModel) {
     val favoriteIds by vm.favoriteIds.collectAsStateWithLifecycle()
     val transfer by vm.transfer.collectAsStateWithLifecycle()
     val downloadProgress by vm.downloadState.collectAsStateWithLifecycle()
+    val downloadedKeys by vm.downloadedKeys.collectAsStateWithLifecycle()
+    val downloadedIdentities by vm.downloadedIdentities.collectAsStateWithLifecycle()
     val update by vm.update.collectAsStateWithLifecycle()
     val dismissedUpdate by vm.dismissedUpdateVersion.collectAsStateWithLifecycle()
 
@@ -137,6 +144,21 @@ fun VibeMusicApp(vm: VibeViewModel) {
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(vm) {
         vm.messages.collect { message -> snackbar.showSnackbar(message) }
+    }
+
+    val downloadLookup: (Track) -> TrackDownloadUi = remember(
+        downloadedKeys,
+        downloadedIdentities,
+        downloadProgress
+    ) {
+        { track ->
+            TrackDownloadStatus.uiFor(
+                track = track,
+                downloadedKeys = downloadedKeys,
+                downloadedIdentities = downloadedIdentities,
+                progress = downloadProgress
+            )
+        }
     }
 
     val openExternal: (String) -> Unit = { url ->
@@ -239,6 +261,7 @@ fun VibeMusicApp(vm: VibeViewModel) {
     val updateAvailable = update.available &&
         update.release?.version != dismissedUpdate
 
+    CompositionLocalProvider(LocalTrackDownloadUi provides downloadLookup) {
     Box(
         Modifier
             .fillMaxSize()
@@ -253,6 +276,10 @@ fun VibeMusicApp(vm: VibeViewModel) {
                         onOpenSettings = { route = "settings" },
                         onOpenPlayer = { route = "player" },
                         onOpenAlbum = { album -> route = "album:$album" },
+                        onTrackMore = { track ->
+                            actionPlaylistId = null
+                            actionTrack = track
+                        },
                         onRequestPermission = requestAudioPermission,
                         onOpenAppSettings = openAppSettings
                     )
@@ -556,6 +583,7 @@ fun VibeMusicApp(vm: VibeViewModel) {
                 .zIndex(4f)
         )
     }
+    }
 
     actionTrack?.let { track ->
         if (track.source == TrackSource.ONLINE) {
@@ -573,6 +601,11 @@ fun VibeMusicApp(vm: VibeViewModel) {
                 },
                 onPlayNext = {
                     vm.playNext(track)
+                    actionTrack = null
+                    actionPlaylistId = null
+                },
+                onAddToQueue = {
+                    vm.addToQueue(track)
                     actionTrack = null
                     actionPlaylistId = null
                 },
@@ -613,6 +646,11 @@ fun VibeMusicApp(vm: VibeViewModel) {
                     actionTrack = null
                     actionPlaylistId = null
                 },
+                onAddToQueue = {
+                    vm.addToQueue(track)
+                    actionTrack = null
+                    actionPlaylistId = null
+                },
                 onToggleFavorite = {
                     vm.toggleFavorite(track)
                     actionTrack = null
@@ -646,6 +684,18 @@ fun VibeMusicApp(vm: VibeViewModel) {
                         actionPlaylistId = null
                         route = "album:$album"
                     }
+                },
+                download = SongDownloadResolver.resolve(
+                    track = track,
+                    downloadedKeys = downloadedKeys,
+                    downloadedIdentities = downloadedIdentities,
+                    quality = vm.downloadQuality(),
+                    wifiOnly = vm.downloadWifiOnly()
+                ),
+                onDownload = {
+                    vm.downloadSong(track)
+                    actionTrack = null
+                    actionPlaylistId = null
                 }
             )
         }

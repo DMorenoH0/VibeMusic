@@ -7,11 +7,13 @@ API v3 y los reproduce dentro de la app con el reproductor oficial embebido
 (YouTube IFrame Player API en un WebView). No extrae audio de plataformas de
 streaming ni descarga canciones completas de catálogos protegidos.
 
-La versión **2.0.0** añade cinco pestañas, recomendaciones calculadas en el
-dispositivo (**Para ti**), descargas autorizadas con progreso y reanudación,
-biblioteca de descargas con tamaño y portada, perfiles de audio por dispositivo,
-ecualizador con 12 presets, listas ampliadas (portada, reordenación, aleatorio)
-y una pantalla de ajustes organizada por categorías.
+La versión **2.1.0** añade la descarga con **un solo toque** para canciones con
+fuente autorizada, un menú contextual completo (añadir a lista, quitar de la
+lista, quitar de Canciones que te gustan, añadir al final de la cola y descargar)
+en toda la app, indicadores de descarga y avisos claros cuando una fuente no
+permite guardar el audio. Mantiene las cinco pestañas, las recomendaciones
+locales (**Para ti**), las descargas reanudables, los perfiles de audio, el
+ecualizador con 12 presets y las listas ampliadas de 2.0.
 
 ## Funciones
 
@@ -35,6 +37,9 @@ y una pantalla de ajustes organizada por categorías.
 - Escaneo real de audio local con MediaStore y permisos de Android 13+.
 - Importación mediante el selector de archivos (SAF).
 - Descargas de enlaces directos HTTPS (MP3, M4A, OGG, FLAC, WAV).
+- Descarga con un solo toque desde el menú de una canción cuando la fuente está
+  autorizada, con portada, metadatos y duración originales.
+- Indicadores de descarga completada, en curso y fallida en las filas.
 - Persistencia con Room: favoritos, listas, descargas e historial.
 - Temporizador de sueño.
 
@@ -44,7 +49,8 @@ y una pantalla de ajustes organizada por categorías.
   duración.
 - Sugerencias e historial de búsquedas borrable.
 - Acciones por resultado: reproducir vista previa, reproducir a continuación,
-  ver álbum y ver artista.
+  añadir al final de la cola, ver álbum y ver artista. El menú explica que la
+  vista previa no se puede descargar.
 - Pantallas de álbum y artista online con listas reales de Deezer.
 - Estados de carga, vacío y error, con textos en español.
 - Las vistas previas **no** se guardan en favoritos, listas ni historial.
@@ -98,21 +104,33 @@ y una pantalla de ajustes organizada por categorías.
   listas. Las recomendaciones se pueden desactivar por completo.
 
 ### Descargas autorizadas
-- Solo enlaces HTTPS directos (MP3, M4A, AAC, OGG/Opus, WAV, FLAC) y archivos
-  elegidos por el usuario. No hay scraping ni extracción de audio de YouTube.
-- Diálogo previo con **calidad** (alta, media, baja; el archivo directo no se
-  recodifica y la app avisa si la fuente solo ofrece una versión) y **conexión**
-  (solo Wi-Fi o Wi-Fi y datos) con aviso de consumo.
+- **Descargar canción** con un solo toque desde el menú de la canción. VibeMusic
+  resuelve la fuente autorizada y toma título, artista, álbum, portada y
+  duración sin pedir URL ni metadatos.
+- Fuentes admitidas: las seis instrumentales propias incluidas en la app y las
+  pistas de proveedores que expongan un `downloadUrl` HTTPS con derechos de
+  descarga. No hay scraping ni extracción de audio de YouTube.
+- Las vistas previas de Deezer (licencia de reproducción), las referencias de
+  YouTube y los archivos locales ya disponibles se muestran como **no
+  disponibles para descarga offline**, con el motivo visible.
+- El formulario manual sigue existiendo como opción avanzada «Añadir enlace
+  autorizado» (MP3, M4A, AAC, OGG/Opus, WAV, FLAC) para enlaces HTTPS directos
+  que el usuario tenga derecho a usar, con **calidad** (alta, media, baja; el
+  archivo directo no se recodifica) y **conexión** (solo Wi-Fi o Wi-Fi y datos)
+  con aviso de consumo.
 - Progreso con portada, nombre, porcentaje, bytes, velocidad, tiempo restante y
   botón Cancelar; notificación del sistema mientras la app está en segundo plano.
 - Servicio en primer plano con la parte descargada en caché; si la red se corta,
   se conserva y el siguiente intento usa `Range` cuando el servidor lo admite.
 - Guardado en el almacenamiento musical (`Music/VibeMusic`) con el nombre
   original saneado, extensión y metadatos; en Android 10+ se publica en
-  MediaStore. La portada se obtiene del enlace indicado o de los metadatos.
+  MediaStore. La portada se conserva como imagen real en el almacenamiento
+  privado de la app.
 - La biblioteca de descargas muestra portada, título, artista, duración, fecha,
   tamaño y permite reproducir, añadir a una lista o eliminar el archivo
   descargado (solo el que creó VibeMusic). Todo funciona sin Internet.
+- Los duplicados se evitan por clave de fuente y por título/artista, incluso
+  después de reiniciar.
 
 ### Bluetooth y ecualizador
 - Detección de la salida de audio actual con las APIs públicas de Android
@@ -129,6 +147,22 @@ y una pantalla de ajustes organizada por categorías.
   no simula que el ecualizador funciona. El **códec** Bluetooth (SBC, AAC,
   aptX, LDAC…) solo está disponible para apps del sistema con permisos
   privilegiados, así que no se inventa ni se muestra un valor falso.
+
+### Menú contextual de canción
+- Disponible en búsqueda, YouTube, biblioteca local, descargas, listas,
+  Canciones que te gustan y recomendaciones de «Para ti».
+- **Añadir a lista**: muestra las listas existentes, permite crear una nueva y
+  evita duplicados.
+- **Quitar de esta lista**: solo aparece al abrir una canción desde una lista y
+  no borra el archivo musical.
+- **Eliminar de Canciones que te gustan**: quita el favorito sin tocar la
+  biblioteca ni el almacenamiento.
+- **Añadir a la cola**: agrega la canción al final sin interrumpir la
+  reproducción actual.
+- **Reproducir a continuación**, ver álbum, descargar o eliminar la descarga
+  según el contexto y la fuente.
+- Hoja inferior oscura y compacta, con portada, iconos coherentes y el estado de
+  descarga de la canción.
 
 ### Listas
 - Crear, renombrar, cambiar portada desde una imagen del dispositivo y eliminar.
@@ -275,7 +309,10 @@ pruebas: 9 del motor de recomendaciones (estabilidad diaria, exclusión de
 saltadas, orden por reproducciones, favoritos, listas, descubrimientos, artistas
 y géneros, fuerza de la señal) y 4 de los presets del ecualizador (12 nombres
 únicos, rangos válidos, Balanced plano y búsqueda tolerante a mayúsculas).
-En total son **56 pruebas unitarias** en 9 suites.
+Desde 2.1.0 se añaden 9 pruebas del resolutor de descargas (muestra propia,
+duplicados por clave e identidad, Deezer, YouTube, archivo local, URL autorizada
+y claves estables).
+En total son **65 pruebas unitarias** en 10 suites.
 
 En el emulador API 37 se han probado además la barra inferior de cuatro
 apartados (a 411 dp y a 360 dp de ancho), Samples, el buscador online de Deezer,
@@ -311,6 +348,20 @@ portada (copiada a almacenamiento privado y visible tras reiniciar), la
 reordenación, la reproducción y la eliminación de una canción; y la
 migración 1→2 de la base de datos conservando las canciones de la versión
 anterior.
+
+En 2.1.0 se verificó en el emulador API 37: la descarga de una muestra con un
+solo toque desde el menú, el progreso y el aviso de finalización, la entrada en
+Descargas con portada, título, artista, duración y tamaño, el archivo real en
+`Music/VibeMusic` con su fila de MediaStore, la portada PNG generada, la
+reproducción con modo avión, la persistencia tras reiniciar el emulador, la
+adición al final de la cola sin interrumpir la reproducción (7→8 y «Siguiente»
+mantiene el orden), el favorito con su etiqueta «Eliminar de Canciones que te
+gustan», la creación y adición a una lista, el aviso de duplicado «Ya está en esa
+lista», «Quitar de esta lista» sin borrar el archivo, el menú contextual en
+búsqueda, resultados online, Descargas, lista y «Para ti», y la eliminación de la
+descarga con limpieza de archivo, MediaStore, portada y entrada, dejando intactos
+archivos ajenos en `Music/`. El menú de YouTube no se pudo abrir con datos reales
+porque no hay clave de API en este entorno.
 
 ## Arquitectura
 
@@ -358,6 +409,11 @@ API 37:
   migración de base de datos 1→2; descarga real de un MP3 directo con progreso,
   cancelación, reanudación y biblioteca; eliminación segura; ecualizador global
   con presets; creación de listas.
+- 2.1.0: descarga con un solo toque de una muestra propia, portada y metadatos,
+  reproducción sin conexión, persistencia tras reiniciar, cola al final,
+  favoritos, listas con duplicados y «Quitar de esta lista», menú contextual en
+  búsqueda, online, Descargas, lista y «Para ti», y eliminación segura de la
+  descarga sin tocar archivos ajenos.
 - Actualización: se instaló el APK publicado de 1.1.0 y después el de 1.2.0
   firmado con el mismo certificado, sin desinstalar y conservando los datos.
   El APK que publica CI tiene el mismo keystore estable. En 1.2.2 se comprobó

@@ -44,6 +44,8 @@ object DownloadBus {
             .put("artworkUrl", request.artworkUrl ?: "")
             .put("quality", request.quality.name)
             .put("wifiOnly", request.wifiOnly)
+            .put("trackId", request.trackId ?: "")
+            .put("localCopy", request.localCopy)
         prefs(context).edit().putString(KEY_PENDING, json.toString()).apply()
     }
 
@@ -58,7 +60,9 @@ object DownloadBus {
                 album = json.optString("album"),
                 artworkUrl = json.optString("artworkUrl").takeIf { it.isNotBlank() },
                 quality = DownloadQuality.byName(json.optString("quality")),
-                wifiOnly = json.optBoolean("wifiOnly", true)
+                wifiOnly = json.optBoolean("wifiOnly", true),
+                trackId = json.optString("trackId").takeIf { it.isNotBlank() },
+                localCopy = json.optBoolean("localCopy", false)
             )
         }.getOrNull()
     }

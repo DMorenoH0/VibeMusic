@@ -3,6 +3,77 @@
 Todas las versiones publicadas de VibeMusic. El formato sigue la idea de
 «Keep a Changelog» y las versiones usan SemVer.
 
+## [2.1.0] - 17 de noviembre de 2026
+
+### Añadido
+
+- **Descarga con un solo toque**: cada canción ofrece «Descargar canción» en su
+  menú contextual. VibeMusic identifica la fuente autorizada, toma título,
+  artista, álbum, portada y duración, descarga el archivo y lo añade a
+  Descargas sin pedir URL ni metadatos.
+- Fuente autorizada para las **muestras originales** incluidas en la app: se
+  copian con su portada procedural convertida en imagen real, conservan nombre
+  y metadatos y se publican en `Music/VibeMusic` y MediaStore.
+- Campo opcional `downloadUrl` en las pistas para proveedores que concedan
+  derechos de descarga; solo se usa cuando la fuente lo autoriza expresamente.
+- **Menú contextual de canción** en resultados de búsqueda, YouTube, biblioteca
+  local, descargas, listas, Canciones que te gustan y «Para ti»:
+  reproducir, reproducir a continuación, **añadir a la cola**, añadir o quitar
+  de Canciones que te gustan, ver álbum, descargar, quitar de la lista actual y
+  eliminar el archivo descargado.
+- **Indicadores de descarga** en cada fila: completada, en curso con porcentaje
+  y fallida, además del estado detallado dentro del menú.
+- Avisos claros cuando una canción **no se puede descargar**: vistas previas de
+  Deezer (licencia de reproducción), referencias de YouTube (sin autorización
+  de descarga) y archivos locales que ya se reproducen sin conexión.
+
+### Cambiado
+
+- El formulario manual de URL, título, artista y calidad deja de ser el flujo
+  principal. Pasa a ser una opción avanzada, «Añadir enlace autorizado», dentro
+  de Descargas, para enlaces HTTPS directos que el usuario tenga derecho a usar.
+- «Añadir a la cola» agrega la canción **al final** de la cola sin interrumpir
+  la reproducción; «Reproducir a continuación» mantiene su comportamiento.
+- El menú evita duplicados por identidad de canción y por clave de fuente, y
+  recuerda las descargas entre reinicios sin cambiar el esquema de la base de
+  datos.
+- Los textos de Descargas explican el flujo de un toque y mantienen la
+  eliminación limitada a los archivos que gestiona VibeMusic.
+
+### Pruebas
+
+- 65 pruebas unitarias en 10 suites (9 nuevas del resolutor de descargas:
+  muestras, duplicados, Deezer, YouTube, archivos locales, URL autorizada,
+  claves estables e identidad sin distinción de mayúsculas).
+- Verificado en emulador API 37 (compilación debug):
+  - «Descargar canción» de una muestra con un solo toque: diálogo de progreso,
+    aviso de finalización y entrada en Descargas con portada, título, artista
+    (Luna Vale), duración 0:40 y tamaño 1,7 MB.
+  - Archivo real en `Music/VibeMusic/Afterglow.wav` (1.764.044 bytes) y fila en
+    MediaStore con título, álbum y duración; portada PNG real de 220 KB en el
+    almacenamiento privado de la app.
+  - Reproducción sin conexión con modo avión activo, mostrando la portada
+    generada, el título y el artista originales.
+  - Persistencia de la descarga y de la portada tras reiniciar el emulador.
+  - «Añadir a la cola» con una cola de 7 canciones: la canción se añadió al
+    final (8 en cola), la reproducción actual no se interrumpió y «Siguiente»
+    siguió con la segunda canción de la cola, no con la añadida.
+  - Favorito: «Añadir a Canciones que te gustan», cambio de etiqueta a
+    «Eliminar de Canciones que te gustan» y eliminación sin tocar la descarga.
+  - Lista: creación desde el menú, adición de la canción, aviso «Ya está en esa
+    lista» al repetirla y «Quitar de esta lista» desde el detalle de la lista,
+    que la dejó con 0 canciones sin borrar el archivo musical.
+  - Menú contextual comprobado en búsqueda local, resultados online de Deezer,
+    Descargas, detalle de lista y «Para ti», con el estado de descarga y el
+    aviso de fuente no descargable según el contexto.
+  - «Eliminar archivo descargado» borró el archivo de `Music/VibeMusic`, su fila
+    de MediaStore, la portada y la entrada de Descargas, y dejó intactos dos
+    archivos antiguos de `Music/` que no pertenecen a esta descarga. Después se
+    pudo volver a descargar la misma canción.
+- No verificable en emulador: el menú de un vídeo de YouTube, porque la
+  búsqueda real necesita una clave válida de YouTube Data API y no hay ninguna
+  configurada en este entorno.
+
 ## [2.0.0] - 15 de noviembre de 2026
 
 ### Añadido

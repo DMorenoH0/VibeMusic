@@ -130,7 +130,7 @@ fun DownloadsScreen(
                 ) {
                     ActionChip(
                         icon = Icons.Rounded.Add,
-                        label = "Descargar enlace",
+                        label = "Añadir por enlace",
                         onClick = onDownload,
                         modifier = Modifier.weight(1f)
                     )
@@ -148,9 +148,9 @@ fun DownloadsScreen(
                     EmptyState(
                         icon = Icons.Rounded.FileDownload,
                         title = "Sin descargas todavía",
-                        message = "Descarga un enlace directo autorizado o importa un archivo de audio. " +
-                            "Después podrás escucharlo sin conexión.",
-                        actionLabel = "Descargar audio",
+                        message = "Abre una canción y elige «Descargar canción» para guardarla con su portada " +
+                            "y metadatos. Las descargas se reproducen sin conexión.",
+                        actionLabel = "Añadir por enlace",
                         onAction = onDownload
                     )
                 }

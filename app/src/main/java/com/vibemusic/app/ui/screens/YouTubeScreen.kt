@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.MoreVert
@@ -309,6 +310,10 @@ fun YouTubeScreen(
             video = video,
             playlists = playlists,
             onDismiss = { actionVideo = null },
+            onPlay = {
+                actionVideo = null
+                onPlayVideo(video)
+            },
             onAdd = { id ->
                 vm.addYouTubeToPlaylist(id, video)
                 actionVideo = null
@@ -338,6 +343,7 @@ private fun YouTubeAddToPlaylistSheet(
     video: YouTubeVideo,
     playlists: List<PlaylistWithCount>,
     onDismiss: () -> Unit,
+    onPlay: () -> Unit,
     onAdd: (Long) -> Unit,
     onNew: () -> Unit
 ) {
@@ -369,6 +375,8 @@ private fun YouTubeAddToPlaylistSheet(
                 )
             }
             HorizontalDivider(color = VibeLine.copy(alpha = 0.6f))
+            YouTubeSheetAction(Icons.Rounded.PlayArrow, "Reproducir en VibeMusic", onPlay)
+            HorizontalDivider(color = VibeLine.copy(alpha = 0.6f))
             YouTubeSheetAction(Icons.Rounded.Add, "Nueva lista", onNew)
             playlists.forEach { item ->
                 YouTubeSheetAction(
@@ -392,6 +400,30 @@ private fun YouTubeAddToPlaylistSheet(
                 color = VibeMuted,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
             )
+            Row(
+                Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Icon(
+                    Icons.Rounded.CloudOff,
+                    contentDescription = null,
+                    tint = VibeMuted,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "No disponible para descarga offline",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = VibeMuted
+                    )
+                    Text(
+                        "YouTube Data API e IFrame solo permiten reproducir: no autorizan descargar audio.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = VibeMuted
+                    )
+                }
+            }
         }
     }
 }

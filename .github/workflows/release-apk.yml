@@ -121,18 +121,18 @@ jobs:
             Descarga VibeMusic.apk y ábrelo en tu dispositivo Android.
             VibeMusic comprueba este hash antes de ofrecer la instalación.
 
-            Novedades de VibeMusic 2.0:
-            - Cinco pestañas: Inicio, Explorar, Buscar, Biblioteca y Para ti, con mini reproductor.
-            - «Para ti»: mezcla diaria, descubrimientos, artistas similares, favoritos y lo más escuchado, calculado solo en el dispositivo.
-            - Descargas autorizadas desde enlaces HTTPS directos: calidad, Wi-Fi o datos, progreso con velocidad y tiempo restante, cancelar, reanudar y guardar en Music/VibeMusic.
-            - Biblioteca de descargas con portada, duración, fecha, tamaño, reproducción sin conexión y eliminación segura.
-            - Perfiles de audio por dispositivo y ecualizador con 12 presets y cinco bandas sobre la sesión global.
-            - Listas con portada persistente, renombrar, reordenar, aleatorio, repetir y referencias de YouTube sin duplicados.
-            - Ajustes por categorías, privacidad y borrado del historial de recomendaciones.
-            - Migración de base de datos 1→2 que conserva canciones, favoritos, historial y listas.
+            Novedades de VibeMusic 2.1:
+            - «Descargar canción» con un solo toque desde el menú de cada canción: fuente autorizada, portada, metadatos y duración sin pedir URL ni datos.
+            - Menú contextual completo en búsqueda, YouTube, biblioteca local, descargas, listas, favoritos y «Para ti».
+            - Añadir a la cola al final sin interrumpir, reproducir a continuación, quitar de esta lista y quitar de Canciones que te gustan.
+            - Indicadores de descarga completada, en curso y fallida en cada fila.
+            - Avisos claros cuando una fuente no permite descarga offline; el formulario manual queda como opción avanzada para enlaces HTTPS autorizados.
+
+            Se mantienen las funciones de 2.0: cinco pestañas, «Para ti» local, descargas con progreso/cancelación/reanudación, biblioteca offline, perfiles de audio y ecualizador con 12 presets, listas ampliadas y migración de base de datos 1→2.
 
             Limitaciones honestas:
-            - Las descargas solo aceptan archivos HTTPS directos; no se extrae audio de YouTube.
+            - Las descargas solo aceptan archivos HTTPS directos o archivos propios autorizados; no se extrae audio de YouTube.
+            - Las vistas previas de Deezer tienen licencia de reproducción, no de descarga, y se muestran como no disponibles.
             - El ecualizador depende de que el fabricante exponga efectos globales; si no, la app lo indica.
             - El códec Bluetooth y el modelo exacto no son APIs públicas; no se inventan.
             - Probado en emulador API 37; no hay pruebas en teléfono físico ni con dispositivos Bluetooth reales.

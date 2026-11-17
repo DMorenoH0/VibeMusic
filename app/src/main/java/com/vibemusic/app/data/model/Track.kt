@@ -31,7 +31,13 @@ data class Track(
     val addedAt: Long = 0L,
     val albumId: String? = null,
     val artistId: String? = null,
-    val previewOnly: Boolean = false
+    val previewOnly: Boolean = false,
+    /**
+     * Direct HTTPS file the provider explicitly authorises for download. It is
+     * only set by catalogue entries that grant those rights; preview-only
+     * streams and YouTube references leave it null.
+     */
+    val downloadUrl: String? = null
 ) {
     val subtitle: String
         get() = when {

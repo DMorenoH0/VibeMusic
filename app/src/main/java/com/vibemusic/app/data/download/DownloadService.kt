@@ -82,6 +82,7 @@ class DownloadService : Service() {
             title = request.title,
             artist = request.artist,
             artworkUrl = request.artworkUrl,
+            trackId = request.trackId,
             status = DownloadStatus.QUEUED,
             quality = request.quality
         )
@@ -234,7 +235,9 @@ class DownloadService : Service() {
             album = getStringExtra(EXTRA_ALBUM).orEmpty(),
             artworkUrl = getStringExtra(EXTRA_ARTWORK)?.takeIf { it.isNotBlank() },
             quality = DownloadQuality.byName(getStringExtra(EXTRA_QUALITY)),
-            wifiOnly = getBooleanExtra(EXTRA_WIFI_ONLY, true)
+            wifiOnly = getBooleanExtra(EXTRA_WIFI_ONLY, true),
+            trackId = getStringExtra(EXTRA_TRACK_ID)?.takeIf { it.isNotBlank() },
+            localCopy = getBooleanExtra(EXTRA_LOCAL_COPY, false)
         )
     }
 
@@ -251,6 +254,8 @@ class DownloadService : Service() {
         private const val EXTRA_ARTWORK = "artwork"
         private const val EXTRA_QUALITY = "quality"
         private const val EXTRA_WIFI_ONLY = "wifiOnly"
+        private const val EXTRA_TRACK_ID = "trackId"
+        private const val EXTRA_LOCAL_COPY = "localCopy"
 
         fun start(context: Context, request: DownloadRequest) {
             DownloadBus.savePending(context, request)
@@ -264,6 +269,8 @@ class DownloadService : Service() {
                 .putExtra(EXTRA_ARTWORK, request.artworkUrl.orEmpty())
                 .putExtra(EXTRA_QUALITY, request.quality.name)
                 .putExtra(EXTRA_WIFI_ONLY, request.wifiOnly)
+                .putExtra(EXTRA_TRACK_ID, request.trackId.orEmpty())
+                .putExtra(EXTRA_LOCAL_COPY, request.localCopy)
             ContextCompat.startForegroundService(context, intent)
         }
 

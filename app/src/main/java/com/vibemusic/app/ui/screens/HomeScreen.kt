@@ -73,6 +73,7 @@ fun HomeScreen(
     onOpenSettings: () -> Unit,
     onOpenPlayer: () -> Unit,
     onOpenAlbum: (String) -> Unit,
+    onTrackMore: (Track) -> Unit,
     onRequestPermission: () -> Unit,
     onOpenAppSettings: () -> Unit
 ) {
@@ -232,7 +233,7 @@ fun HomeScreen(
                             onOpenPlayer()
                         },
                         onFavorite = { vm.toggleFavorite(track) },
-                        onMore = { vm.playNext(track) }
+                        onMore = { onTrackMore(track) }
                     )
                 }
             }

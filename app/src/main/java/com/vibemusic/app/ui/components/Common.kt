@@ -23,8 +23,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.rounded.DownloadDone
+import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -195,6 +198,43 @@ fun TrackRow(
                 )
             }
             Spacer(Modifier.width(4.dp))
+        }
+        val download = LocalTrackDownloadUi.current(track)
+        when {
+            download.active -> {
+                CircularProgressIndicator(
+                    progress = { download.percent / 100f },
+                    modifier = Modifier
+                        .padding(horizontal = 4.dp)
+                        .size(16.dp),
+                    color = VibeRed,
+                    trackColor = VibeSurface,
+                    strokeWidth = 2.dp
+                )
+                Spacer(Modifier.width(2.dp))
+            }
+
+            download.downloaded -> {
+                Icon(
+                    Icons.Rounded.DownloadDone,
+                    contentDescription = "Descargada",
+                    tint = VibeRed,
+                    modifier = Modifier
+                        .padding(horizontal = 4.dp)
+                        .size(17.dp)
+                )
+            }
+
+            download.failed -> {
+                Icon(
+                    Icons.Rounded.ErrorOutline,
+                    contentDescription = "La descarga falló",
+                    tint = Color(0xFFFF8A80),
+                    modifier = Modifier
+                        .padding(horizontal = 4.dp)
+                        .size(17.dp)
+                )
+            }
         }
         Text(
             text = formatDuration(track.durationMs),

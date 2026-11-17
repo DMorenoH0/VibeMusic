@@ -19,7 +19,15 @@ data class DownloadRequest(
     val album: String = "",
     val artworkUrl: String? = null,
     val quality: DownloadQuality = DownloadQuality.HIGH,
-    val wifiOnly: Boolean = true
+    val wifiOnly: Boolean = true,
+    /** Stable identity of the song in the catalogue, used to avoid duplicates. */
+    val trackId: String? = null,
+    /**
+     * True when the audio is already an authorised copy inside the app (the
+     * bundled original samples). No network is used and the file is published
+     * to the offline library in one step.
+     */
+    val localCopy: Boolean = false
 )
 
 enum class DownloadStatus { QUEUED, DOWNLOADING, FINISHED, FAILED, CANCELLED }
@@ -29,6 +37,7 @@ data class DownloadProgress(
     val title: String,
     val artist: String,
     val artworkUrl: String?,
+    val trackId: String? = null,
     val status: DownloadStatus = DownloadStatus.QUEUED,
     val bytes: Long = 0L,
     val totalBytes: Long = 0L,

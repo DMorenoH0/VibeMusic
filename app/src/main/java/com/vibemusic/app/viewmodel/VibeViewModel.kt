@@ -32,6 +32,8 @@ import com.vibemusic.app.data.download.DownloadProgress
 import com.vibemusic.app.data.download.DownloadQuality
 import com.vibemusic.app.data.download.DownloadRequest
 import com.vibemusic.app.data.download.DownloadService
+import com.vibemusic.app.data.download.SongDownloadAvailability
+import com.vibemusic.app.data.download.SongDownloadResolver
 import com.vibemusic.app.data.model.Track
 import com.vibemusic.app.data.model.TrackSource
 import com.vibemusic.app.data.recommend.ListeningSignal
@@ -248,6 +250,24 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
+     * Identities of every song already saved offline. Used both to paint the
+     * "downloaded" badge and to stop a second copy of the same song.
+     */
+    val downloadedKeys: StateFlow<Set<String>> = repository.downloadEntities
+        .map { list ->
+            list.mapNotNull { entity -> entity.sourceUrl.takeIf { it.isNotBlank() } }.toSet()
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
+    val downloadedIdentities: StateFlow<Set<String>> = repository.downloadEntities
+        .map { list ->
+            list.map { entity ->
+                SongDownloadResolver.identityOf(entity.title, entity.artist)
+            }.toSet()
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
+    /**
      * "Para ti" is computed on-device from listening history, favourites,
      * playlists and the local catalogue. It never performs network requests and
      * returns an empty list when the user disables recommendations.
@@ -461,6 +481,16 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 "Añadido a la cola: ${track.title}"
             }
         )
+    }
+
+    /**
+     * Adds the song after everything already queued. The current playback and
+     * the next song stay untouched.
+     */
+    fun addToQueue(track: Track) {
+        cacheOnline(listOf(track))
+        PlayerController.enqueueLast(track)
+        notify("Añadido al final de la cola: ${track.title}")
     }
 
     // ---------------- Favorites ----------------
@@ -1373,6 +1403,24 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         DownloadService.start(getApplication(), request)
     }
 
+    /** One-tap download: resolves the authorised source and starts it directly. */
+    fun downloadSong(track: Track) {
+        when (val availability = downloadAvailability(track)) {
+            is SongDownloadAvailability.Available -> startDownload(availability.request)
+            is SongDownloadAvailability.Downloaded -> notify(availability.label)
+            is SongDownloadAvailability.Unavailable -> notify(availability.reason)
+        }
+    }
+
+    fun downloadAvailability(track: Track): SongDownloadAvailability =
+        SongDownloadResolver.resolve(
+            track = track,
+            downloadedKeys = downloadedKeys.value,
+            downloadedIdentities = downloadedIdentities.value,
+            quality = settings.downloadQuality.value,
+            wifiOnly = settings.wifiOnly.value
+        )
+
     fun cancelDownload() {
         DownloadService.cancel(getApplication())
     }
@@ -1394,6 +1442,10 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setDownloadQuality(quality: DownloadQuality) = settings.setDownloadQuality(quality)
+
+    fun downloadQuality(): DownloadQuality = settings.downloadQuality.value
+
+    fun downloadWifiOnly(): Boolean = settings.wifiOnly.value
 
     fun setRecommendationsEnabled(enabled: Boolean) {
         settings.setRecommendationsEnabled(enabled)

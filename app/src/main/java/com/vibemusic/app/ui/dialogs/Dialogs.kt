@@ -17,6 +17,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Favorite
@@ -54,6 +56,7 @@ import com.vibemusic.app.data.download.DownloadProgress
 import com.vibemusic.app.data.download.DownloadQuality
 import com.vibemusic.app.data.download.DownloadRequest
 import com.vibemusic.app.data.download.DownloadStatus
+import com.vibemusic.app.data.download.SongDownloadAvailability
 import com.vibemusic.app.data.model.Track
 import com.vibemusic.app.data.model.TrackSource
 import com.vibemusic.app.ui.components.AlbumArt
@@ -124,7 +127,7 @@ fun DownloadDialog(
         containerColor = VibeSurfaceHigh,
         titleContentColor = VibeCream,
         textContentColor = VibeMuted,
-        title = { Text("Descargar audio") },
+        title = { Text("Añadir enlace autorizado") },
         text = {
             Column(
                 Modifier
@@ -133,7 +136,9 @@ fun DownloadDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    "Enlace directo a un archivo autorizado (MP3, M4A, OGG, FLAC, WAV…).",
+                    "Para canciones con fuente autorizada usa «Descargar canción» en su menú: " +
+                        "se descargan con un solo toque, con portada y metadatos. " +
+                        "Este formulario es solo para un enlace https directo que tengas derecho a usar.",
                     style = MaterialTheme.typography.bodySmall,
                     color = VibeMuted
                 )
@@ -473,12 +478,15 @@ fun TrackActionSheet(
     onDismiss: () -> Unit,
     onPlay: () -> Unit,
     onPlayNext: () -> Unit,
+    onAddToQueue: () -> Unit,
     onToggleFavorite: () -> Unit,
     onAddToPlaylist: (Long) -> Unit,
     onRemoveFromPlaylist: (Long) -> Unit,
     onDeleteDownload: () -> Unit,
     onNewPlaylist: () -> Unit,
-    onOpenAlbum: (() -> Unit)?
+    onOpenAlbum: (() -> Unit)?,
+    download: SongDownloadAvailability,
+    onDownload: () -> Unit
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -522,13 +530,46 @@ fun TrackActionSheet(
             SheetAction(Icons.Rounded.PlayArrow, "Reproducir ahora", onClick = onPlay)
             SheetAction(Icons.Rounded.SkipNext, "Reproducir a continuación", onClick = onPlayNext)
             SheetAction(
+                Icons.Rounded.PlaylistAdd,
+                "Añadir a la cola",
+                note = "Se añade al final, sin interrumpir lo que suena.",
+                onClick = onAddToQueue
+            )
+            SheetAction(
                 if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                if (isFavorite) "Quitar de favoritos" else "Añadir a favoritos",
+                if (isFavorite) {
+                    "Eliminar de Canciones que te gustan"
+                } else {
+                    "Añadir a Canciones que te gustan"
+                },
                 tint = if (isFavorite) VibeRed else VibeCream,
                 onClick = onToggleFavorite
             )
             if (onOpenAlbum != null) {
                 SheetAction(Icons.Rounded.Album, "Ver álbum", onClick = onOpenAlbum)
+            }
+            when (download) {
+                is SongDownloadAvailability.Available -> SheetAction(
+                    Icons.Rounded.Download,
+                    download.label,
+                    tint = VibeRed,
+                    note = "Un toque: portada y metadatos originales, disponible sin conexión.",
+                    onClick = onDownload
+                )
+
+                is SongDownloadAvailability.Downloaded -> SheetStatus(
+                    Icons.Rounded.CheckCircle,
+                    download.label,
+                    "Puedes reproducirla sin Internet desde Descargas.",
+                    tint = VibeRed
+                )
+
+                is SongDownloadAvailability.Unavailable -> SheetStatus(
+                    Icons.Rounded.CloudOff,
+                    download.label,
+                    download.reason,
+                    tint = VibeMuted
+                )
             }
             if (playlistId != null) {
                 SheetAction(
@@ -580,6 +621,7 @@ private fun SheetAction(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     tint: androidx.compose.ui.graphics.Color = VibeCream,
+    note: String? = null,
     onClick: () -> Unit
 ) {
     Row(
@@ -591,7 +633,42 @@ private fun SheetAction(
     ) {
         Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(16.dp))
-        Text(label, style = MaterialTheme.typography.bodyLarge, color = tint)
+        Column(Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.bodyLarge, color = tint)
+            if (!note.isNullOrBlank()) {
+                Text(
+                    note,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = VibeMuted
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SheetStatus(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    note: String,
+    tint: androidx.compose.ui.graphics.Color
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.bodyLarge, color = tint)
+            Text(
+                note,
+                style = MaterialTheme.typography.labelSmall,
+                color = VibeMuted
+            )
+        }
     }
 }
 

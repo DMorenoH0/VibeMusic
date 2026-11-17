@@ -304,6 +304,22 @@ object PlayerController {
         }
     }
 
+    /**
+     * Appends to the end of the queue without touching the current item or the
+     * next song, so playback is never interrupted.
+     */
+    fun enqueueLast(track: Track) {
+        val player = controller ?: return
+        val item = toMediaItem(track)
+        if (player.mediaItemCount == 0) {
+            player.setMediaItem(item)
+            player.prepare()
+        } else {
+            player.addMediaItem(item)
+        }
+        syncState(player)
+    }
+
     fun jumpTo(index: Int) {
         val player = controller ?: return
         if (index in 0 until player.mediaItemCount) {

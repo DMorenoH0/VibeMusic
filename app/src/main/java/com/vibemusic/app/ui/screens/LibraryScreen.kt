@@ -427,8 +427,9 @@ private fun DownloadTab(
                 EmptyState(
                     icon = Icons.Rounded.Download,
                     title = "Sin música descargada",
-                    message = "Aquí solo aparecen los archivos descargados desde VibeMusic. Eliminar una descarga de la app no borra archivos ajenos a ella.",
-                    actionLabel = "Descargar audio",
+                    message = "Abre una canción y elige «Descargar canción»: se guarda con su portada y metadatos. " +
+                        "Aquí también puedes añadir un enlace HTTPS autorizado.",
+                    actionLabel = "Añadir por enlace",
                     onAction = onDownload
                 )
             }

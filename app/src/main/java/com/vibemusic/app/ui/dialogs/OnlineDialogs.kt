@@ -12,9 +12,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -43,6 +45,7 @@ fun OnlineTrackActionSheet(
     onDismiss: () -> Unit,
     onPlay: () -> Unit,
     onPlayNext: () -> Unit,
+    onAddToQueue: () -> Unit,
     onOpenAlbum: (() -> Unit)?,
     onOpenArtist: (() -> Unit)?
 ) {
@@ -90,11 +93,37 @@ fun OnlineTrackActionSheet(
             HorizontalDivider(color = VibeLine.copy(alpha = 0.6f))
             OnlineSheetAction(Icons.Rounded.PlayArrow, "Reproducir vista previa", onClick = onPlay)
             OnlineSheetAction(Icons.Rounded.SkipNext, "Reproducir a continuación", onClick = onPlayNext)
+            OnlineSheetAction(Icons.Rounded.PlaylistAdd, "Añadir a la cola", onClick = onAddToQueue)
             if (onOpenAlbum != null) {
                 OnlineSheetAction(Icons.Rounded.Album, "Ver álbum", onClick = onOpenAlbum)
             }
             if (onOpenArtist != null) {
                 OnlineSheetAction(Icons.Rounded.Person, "Ver artista", onClick = onOpenArtist)
+            }
+            HorizontalDivider(color = VibeLine.copy(alpha = 0.6f))
+            Row(
+                Modifier.padding(horizontal = 20.dp, vertical = 13.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Icon(
+                    Icons.Rounded.CloudOff,
+                    contentDescription = null,
+                    tint = VibeMuted,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "No disponible para descarga offline",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = VibeMuted
+                    )
+                    Text(
+                        "La vista previa tiene licencia de reproducción, no de descarga.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = VibeMuted
+                    )
+                }
             }
             HorizontalDivider(color = VibeLine.copy(alpha = 0.6f))
             Row(
