@@ -363,6 +363,10 @@ descarga con limpieza de archivo, MediaStore, portada y entrada, dejando intacto
 archivos ajenos en `Music/`. El menú de YouTube no se pudo abrir con datos reales
 porque no hay clave de API en este entorno.
 
+La actualización 2.0.0 → 2.1.0 se instaló sin desinstalar con el APK firmado del
+release: `firstInstallTime` no cambió, el favorito y la lista creados en 2.0.0 se
+conservaron, y la descarga de un toque funcionó en el APK publicado.
+
 ## Arquitectura
 
 - `data/`: Room (v2 con migración desde 1.x), MediaStore, descargas, ajustes,

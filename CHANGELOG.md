@@ -70,6 +70,12 @@ Todas las versiones publicadas de VibeMusic. El formato sigue la idea de
     de MediaStore, la portada y la entrada de Descargas, y dejó intactos dos
     archivos antiguos de `Music/` que no pertenecen a esta descarga. Después se
     pudo volver a descargar la misma canción.
+- Actualización 2.0.0 → 2.1.0 con el APK firmado del release, instalado encima
+  sin desinstalar: `firstInstallTime` se mantuvo (17 nov 2026, 14:24:23), el
+  favorito de Afterglow y la lista «Actualizacion21» creados en 2.0.0 siguieron
+  presentes, el menú mostró «Eliminar de Canciones que te gustan» y
+  «Descargar canción», y la descarga de un toque volvió a completarse en el
+  APK publicado.
 - No verificable en emulador: el menú de un vídeo de YouTube, porque la
   búsqueda real necesita una clave válida de YouTube Data API y no hay ninguna
   configurada en este entorno.
