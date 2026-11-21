@@ -3,6 +3,63 @@
 Todas las versiones publicadas de VibeMusic. El formato sigue la idea de
 «Keep a Changelog» y las versiones usan SemVer.
 
+## [3.0.0] - 21 de noviembre de 2026
+
+### Añadido
+
+- **Audius como fuente principal de canciones completas** mediante su API
+  oficial v1 (`https://api.audius.co/v1`, `app_name=VibeMusic`). Se consultan
+  pistas, artistas, álbumes y listas reales; el audio se reproduce desde el
+  endpoint oficial de streaming de cada pista.
+- **Buscador unificado**: una sola búsqueda muestra canciones completas,
+  artistas, álbumes y listas de Audius, además de las vistas previas de Deezer
+  como fuente secundaria etiquetada. Cada proveedor falla de forma aislada y
+  muestra su propio aviso.
+- **Pantallas de artista, álbum y lista de Audius** con portada, biografía,
+  seguidores, número de pistas, reproducción, mezcla y recomendaciones
+  relacionadas obtenidas de endpoints oficiales.
+- **Descarga autorizada de Audius con un solo toque**: se comprueban los campos
+  reales `is_downloadable`, `is_download_gated`, `access.download` y
+  `download_conditions` antes de ofrecer la descarga. Se descargan la portada
+  original, el título, artista, álbum y duración, y el archivo se publica en
+  `Music/VibeMusic` y MediaStore con el nombre derivado del título.
+- Progreso con porcentaje, tamaño total, velocidad y tiempo restante; botón
+  Cancelar que conserva el archivo parcial y reanudación con `Range` cuando el
+  servidor la admite.
+- **Motivos claros de rechazo** cuando la pista no es descargable: el artista no
+  la autorizó, la descarga está desactivada, requiere compra en USDC, seguir al
+  artista, un NFT o un token. VibeMusic no procesa pagos ni elude condiciones.
+- Arquitectura de proveedores (`MusicProvider`, `ProviderRegistry`,
+  `AudiusProvider`) preparada para añadir otro proveedor sin simular una conexión
+  comercial ni incluir credenciales.
+- Caché en memoria con TTL para búsquedas y detalles de Audius, y traducción de
+  errores HTTP 401/403/404/429/5xx y de red a mensajes en español.
+- Pistas de Audius en favoritos, listas, historial, cola, reproductor, mini
+  reproductor y biblioteca, con insignia de origen y acciones completas.
+- Secciones de descubrimiento de Audius en Inicio, Explorar y Para ti.
+
+### Cambiado
+
+- La base de datos pasa a la **versión 3** con una migración aditiva 2→3 que
+  conserva favoritos, listas, historial y descargas. No se borra ningún dato.
+- La política de privacidad y los términos describen Audius, la Open Music
+  License, las descargas autorizadas y la ausencia de envío de historial.
+- El menú de canción muestra «Ver álbum» y «Ver artista» de Audius y mantiene
+  «Añadir a lista», cola, favoritos y descarga.
+- Las vistas previas de Deezer sin URL de audio dejan de mostrarse, y un error
+  anterior del reproductor se limpia al iniciar una reproducción nueva.
+
+### Pruebas
+
+- 12 pruebas nuevas del parser y del permiso de descarga de Audius, y 4 nuevas
+  del resolutor de descargas para Audius (81 pruebas unitarias en 11 suites).
+- Verificación real en emulador API 37: búsqueda unificada, reproducción
+  completa, pantallas de artista/álbum, favoritos y listas con pistas de Audius,
+  descarga de pistas autorizadas, rechazo de pista con compra en USDC, rechazo
+  de pista no descargable, cancelación con archivo parcial, reanudación, archivo
+  final con metadatos y portada, reproducción sin conexión y persistencia tras
+  reiniciar.
+
 ## [2.1.0] - 17 de noviembre de 2026
 
 ### Añadido

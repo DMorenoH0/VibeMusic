@@ -55,6 +55,8 @@ import com.vibemusic.app.ui.AlbumGroup
 import com.vibemusic.app.ui.components.AlbumCard
 import com.vibemusic.app.ui.components.EmptyState
 import com.vibemusic.app.ui.components.ErrorBanner
+import com.vibemusic.app.ui.components.ProviderArtistCard
+import com.vibemusic.app.ui.components.ProviderCollectionCard
 import com.vibemusic.app.ui.components.SectionHeader
 import com.vibemusic.app.ui.components.TrackRow
 import com.vibemusic.app.ui.components.VibePageBackground
@@ -75,7 +77,9 @@ fun SearchScreen(
     onOpenAlbum: (String) -> Unit,
     onTrackMore: (Track) -> Unit,
     onOpenOnlineAlbum: (String) -> Unit,
-    onOpenOnlineArtist: (String) -> Unit
+    onOpenOnlineArtist: (String) -> Unit,
+    onOpenAudiusArtist: (String) -> Unit,
+    onOpenAudiusCollection: (String) -> Unit
 ) {
     val query by vm.searchQuery.collectAsStateWithLifecycle()
     val results by vm.searchResults.collectAsStateWithLifecycle()
@@ -92,11 +96,13 @@ fun SearchScreen(
         tracks.filter { it.source == TrackSource.DEMO }.mapNotNull { it.genre }.distinct()
     }
     val albums: List<AlbumGroup> = remember(results) { groupAlbums(results) }
-    val suggestions = remember(query, online.results, history) {
+    val suggestions = remember(query, online.tracks, online.previews, history) {
         val needle = query.trim()
         if (needle.length < 2) emptyList() else {
             (history.filter { it.contains(needle, true) && !it.equals(needle, true) } +
-                online.results.map { it.artist }.distinct())
+                online.artists.map { it.name } +
+                online.tracks.map { it.artist } +
+                online.previews.map { it.artist })
                 .filter { it.isNotBlank() }
                 .distinct()
                 .take(8)
@@ -317,7 +323,7 @@ fun SearchScreen(
                             Icon(Icons.Rounded.Cloud, contentDescription = null, tint = VibeRed, modifier = Modifier.size(17.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                "Catálogo online · Deezer",
+                                "Audius · canciones completas",
                                 style = MaterialTheme.typography.titleSmall,
                                 color = VibeCream,
                                 modifier = Modifier.weight(1f)
@@ -329,15 +335,19 @@ fun SearchScreen(
                             }
                         }
                         Text(
-                            "Vistas previas oficiales de 30 s. Puedes descubrir música que no está en tu biblioteca.",
+                            "Catálogo abierto de Audius: artistas, álbumes, listas y pistas completas. " +
+                                "Sin cuenta y sin enviar tu historial.",
                             style = MaterialTheme.typography.labelSmall,
                             color = VibeMuted,
                             modifier = Modifier.padding(horizontal = 20.dp)
                         )
                     }
 
-                    when {
-                        online.loading -> item {
+                    if (online.loading &&
+                        online.tracks.isEmpty() && online.artists.isEmpty() &&
+                        online.collections.isEmpty() && online.previews.isEmpty()
+                    ) {
+                        item {
                             Row(
                                 Modifier
                                     .fillMaxWidth()
@@ -350,33 +360,141 @@ fun SearchScreen(
                                     strokeWidth = 2.dp
                                 )
                                 Spacer(Modifier.width(12.dp))
-                                Text("Buscando en el catálogo…", style = MaterialTheme.typography.bodySmall, color = VibeMuted)
+                                Text(
+                                    "Buscando en Audius y Deezer…",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = VibeMuted
+                                )
                             }
                         }
+                    }
 
-                        online.error != null -> item {
+                    online.error?.let { message ->
+                        item {
                             ErrorBanner(
-                                message = online.error.orEmpty(),
+                                message = message,
                                 onRetry = vm::retryOnlineSearch
                             )
                         }
+                    }
 
-                        online.searched && online.results.isEmpty() -> item {
-                            EmptyState(
-                                icon = Icons.Rounded.Search,
-                                title = "Sin resultados online",
-                                message = "No encontramos «${online.query}» en el catálogo. Prueba con otro título, artista o álbum."
+                    if (online.artists.isNotEmpty()) {
+                        item { SectionHeader("Artistas en Audius") }
+                        item {
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(online.artists, key = { it.seed }) { artist ->
+                                    ProviderArtistCard(
+                                        artist = artist,
+                                        onClick = { onOpenAudiusArtist(artist.id) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (online.tracks.isNotEmpty()) {
+                        item { SectionHeader("Canciones completas en Audius") }
+                        items(online.tracks, key = { it.id }) { track ->
+                            TrackRow(
+                                track = track,
+                                isFavorite = track.id in favoriteIds,
+                                isCurrent = player.mediaId == track.id,
+                                isPlaying = player.isPlaying,
+                                onClick = {
+                                    vm.playFromList(online.tracks, track)
+                                    onOpenPlayer()
+                                },
+                                onFavorite = { vm.toggleFavorite(track) },
+                                onMore = { onTrackMore(track) }
                             )
                         }
+                    }
 
-                        else -> items(online.results, key = { it.id }) { track ->
+                    if (online.albums.isNotEmpty()) {
+                        item { SectionHeader("Álbumes en Audius") }
+                        item {
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                items(online.albums, key = { it.seed }) { collection ->
+                                    ProviderCollectionCard(
+                                        collection = collection,
+                                        onClick = { onOpenAudiusCollection(collection.id) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (online.playlists.isNotEmpty()) {
+                        item { SectionHeader("Listas en Audius") }
+                        item {
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                items(online.playlists, key = { it.seed }) { collection ->
+                                    ProviderCollectionCard(
+                                        collection = collection,
+                                        onClick = { onOpenAudiusCollection(collection.id) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    online.warnings.forEach { warning ->
+                        item {
+                            Text(
+                                warning,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = VibeMuted,
+                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    if (online.previews.isNotEmpty()) {
+                        item {
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Cloud,
+                                    contentDescription = null,
+                                    tint = VibeMuted,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    "Vistas previas · Deezer",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = VibeCream,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            Text(
+                                "Clips promocionales de 30 s como fuente secundaria. No se descargan.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = VibeMuted,
+                                modifier = Modifier.padding(horizontal = 20.dp)
+                            )
+                        }
+                        items(online.previews, key = { "preview:${it.id}" }) { track ->
                             TrackRow(
                                 track = track,
                                 isFavorite = false,
                                 isCurrent = player.mediaId == track.id,
                                 isPlaying = player.isPlaying,
                                 onClick = {
-                                    vm.playFromList(online.results, track)
+                                    vm.playFromList(online.previews, track)
                                     onOpenPlayer()
                                 },
                                 onFavorite = null,
@@ -385,7 +503,18 @@ fun SearchScreen(
                         }
                     }
 
-                    if (results.isEmpty() && !online.loading && online.results.isEmpty() && online.error == null && online.searched) {
+                    if (online.searched && !online.loading && !online.hasAnything && online.error == null) {
+                        item {
+                            EmptyState(
+                                icon = Icons.Rounded.Search,
+                                title = "Sin resultados online",
+                                message = "No encontramos «${online.query}» en Audius ni en Deezer. " +
+                                    "Prueba con otro título, artista o álbum."
+                            )
+                        }
+                    }
+
+                    if (results.isEmpty() && !online.loading && !online.hasAnything && online.error == null && online.searched) {
                         item {
                             Text(
                                 "Tampoco hay coincidencias en tu biblioteca.",
@@ -414,7 +543,7 @@ private fun OnlineSourceNote() {
         Icon(Icons.Rounded.Cloud, contentDescription = null, tint = VibeRed, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(10.dp))
         Text(
-            "El buscador online usa la API pública de Deezer. Solo reproduce clips promocionales de 30 segundos y no descarga audio protegido.",
+            "Buscar consulta la API pública de Audius para canciones completas y la de Deezer para vistas previas de 30 s. No se descarga audio protegido y tu historial nunca se envía.",
             style = MaterialTheme.typography.labelSmall,
             color = VibeMuted
         )

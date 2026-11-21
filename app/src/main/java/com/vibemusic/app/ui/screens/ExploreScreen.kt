@@ -29,6 +29,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -42,6 +43,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vibemusic.app.ui.ArtistGroup
 import com.vibemusic.app.ui.components.AlbumArt
 import com.vibemusic.app.ui.components.AlbumCard
+import com.vibemusic.app.ui.components.AudiusTrackRail
 import com.vibemusic.app.ui.components.PermissionBanner
 import com.vibemusic.app.ui.components.SectionHeader
 import com.vibemusic.app.ui.groupAlbums
@@ -66,8 +68,11 @@ fun ExploreScreen(
 ) {
     val tracks by vm.allTracks.collectAsStateWithLifecycle()
     val scanState by vm.scanState.collectAsStateWithLifecycle()
+    val audius by vm.audiusDiscovery.collectAsStateWithLifecycle()
     val albums = remember(tracks) { groupAlbums(tracks) }
     val artists = remember(tracks) { groupArtists(tracks) }
+
+    LaunchedEffect(Unit) { vm.loadAudiusDiscovery() }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val columns = when {
@@ -122,6 +127,20 @@ fun ExploreScreen(
                     )
                 }
 
+                item {
+                    AudiusTrackRail(
+                        title = "Tendencias en Audius",
+                        tracks = audius.tracks,
+                        loading = audius.loading,
+                        error = audius.error,
+                        onRetry = vm::refreshAudiusDiscovery,
+                        onPlay = { track ->
+                            vm.playFromList(audius.tracks, track)
+                            onOpenPlayer()
+                        }
+                    )
+                }
+
                 item { SectionHeader("Álbumes") }
                 item {
                     Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
@@ -159,8 +178,9 @@ fun ExploreScreen(
                 item {
                     Column(Modifier.padding(20.dp)) {
                         Text(
-                            "La búsqueda online usa el catálogo público de Deezer con vistas previas de 30 s. " +
-                                "Los vídeos de la sección YouTube se reproducen con el reproductor oficial integrado, sin extraer audio.",
+                            "La búsqueda consulta Audius para canciones completas y Deezer para vistas " +
+                                "previas de 30 s. Los vídeos de la sección YouTube se reproducen con el " +
+                                "reproductor oficial integrado, sin extraer audio.",
                             style = MaterialTheme.typography.bodySmall,
                             color = VibeMuted
                         )

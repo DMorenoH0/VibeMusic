@@ -15,7 +15,11 @@ data class FavoriteEntity(
     val artworkUri: String?,
     val durationMs: Long,
     val source: String,
-    val addedAt: Long
+    val addedAt: Long,
+    /** Authorised download endpoint snapshot, if the provider granted one. */
+    val downloadUrl: String? = null,
+    /** Provider explanation when downloads are not allowed. */
+    val downloadBlockedReason: String? = null
 )
 
 @Entity(tableName = "playlists")
@@ -39,7 +43,9 @@ data class PlaylistTrackEntity(
     val durationMs: Long,
     val source: String,
     val position: Int,
-    val addedAt: Long
+    val addedAt: Long,
+    val downloadUrl: String? = null,
+    val downloadBlockedReason: String? = null
 )
 
 @Entity(tableName = "recent")
@@ -52,7 +58,9 @@ data class RecentEntity(
     val artworkUri: String?,
     val durationMs: Long,
     val source: String,
-    val playedAt: Long
+    val playedAt: Long,
+    val downloadUrl: String? = null,
+    val downloadBlockedReason: String? = null
 )
 
 @Entity(tableName = "downloads")

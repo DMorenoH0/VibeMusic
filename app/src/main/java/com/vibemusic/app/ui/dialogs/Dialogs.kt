@@ -24,6 +24,7 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.SkipNext
@@ -485,6 +486,7 @@ fun TrackActionSheet(
     onDeleteDownload: () -> Unit,
     onNewPlaylist: () -> Unit,
     onOpenAlbum: (() -> Unit)?,
+    onOpenArtist: (() -> Unit)? = null,
     download: SongDownloadAvailability,
     onDownload: () -> Unit
 ) {
@@ -547,6 +549,9 @@ fun TrackActionSheet(
             )
             if (onOpenAlbum != null) {
                 SheetAction(Icons.Rounded.Album, "Ver álbum", onClick = onOpenAlbum)
+            }
+            if (onOpenArtist != null) {
+                SheetAction(Icons.Rounded.Person, "Ver artista", onClick = onOpenArtist)
             }
             when (download) {
                 is SongDownloadAvailability.Available -> SheetAction(

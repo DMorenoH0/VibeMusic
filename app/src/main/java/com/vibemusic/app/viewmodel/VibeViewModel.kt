@@ -44,6 +44,13 @@ import com.vibemusic.app.data.online.OnlineAlbum
 import com.vibemusic.app.data.online.OnlineApiException
 import com.vibemusic.app.data.online.OnlineArtist
 import com.vibemusic.app.data.online.OnlineTrack
+import com.vibemusic.app.data.provider.AudiusProvider
+import com.vibemusic.app.data.provider.ProviderArtist
+import com.vibemusic.app.data.provider.ProviderArtistDetail
+import com.vibemusic.app.data.provider.ProviderCollection
+import com.vibemusic.app.data.provider.ProviderCollectionDetail
+import com.vibemusic.app.data.provider.ProviderInfo
+import com.vibemusic.app.data.provider.ProviderRegistry
 import com.vibemusic.app.data.update.GitHubReleaseService
 import com.vibemusic.app.data.update.ReleaseInfo
 import com.vibemusic.app.data.update.UpdateDownloadState
@@ -60,8 +67,11 @@ import com.vibemusic.app.playback.PlayerController
 import com.vibemusic.app.playback.PlayerUiState
 import com.vibemusic.app.playback.QueueItem
 import com.vibemusic.app.ui.theme.VibeThemeStyle
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -111,9 +121,40 @@ data class EqUiState(
 data class OnlineSearchState(
     val query: String = "",
     val loading: Boolean = false,
-    val results: List<Track> = emptyList(),
+    /** Full-length Audius tracks. */
+    val tracks: List<Track> = emptyList(),
+    val artists: List<ProviderArtist> = emptyList(),
+    val collections: List<ProviderCollection> = emptyList(),
+    /** Official 30-second Deezer previews, kept as a secondary catalogue. */
+    val previews: List<Track> = emptyList(),
+    val warnings: List<String> = emptyList(),
     val error: String? = null,
     val searched: Boolean = false
+) {
+    val albums: List<ProviderCollection> get() = collections.filter { it.isAlbum }
+    val playlists: List<ProviderCollection> get() = collections.filterNot { it.isAlbum }
+    val hasAnything: Boolean
+        get() = tracks.isNotEmpty() || artists.isNotEmpty() ||
+            collections.isNotEmpty() || previews.isNotEmpty()
+}
+
+data class AudiusDiscoveryState(
+    val loading: Boolean = false,
+    val tracks: List<Track> = emptyList(),
+    val error: String? = null,
+    val loaded: Boolean = false
+)
+
+data class AudiusArtistState(
+    val loading: Boolean = false,
+    val detail: ProviderArtistDetail? = null,
+    val error: String? = null
+)
+
+data class AudiusCollectionState(
+    val loading: Boolean = false,
+    val detail: ProviderCollectionDetail? = null,
+    val error: String? = null
 )
 
 data class OnlineAlbumState(
@@ -181,6 +222,8 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = MusicRepository(application, SettingsStore(application))
     private val settings = repository.settings
     private val deezer = DeezerService()
+    private val audiusProvider = AudiusProvider()
+    private val providers = ProviderRegistry(listOf(audiusProvider))
     private val releases = GitHubReleaseService()
     private val installer = UpdateInstaller(application)
     private val googleAuth = GoogleAuthManager(application)
@@ -304,6 +347,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             ?: player.mediaId?.let { id ->
                 val uri = player.uri.orEmpty()
                 val source = when {
+                    id.startsWith("audius:") -> TrackSource.AUDIUS
                     uri.startsWith("http") -> TrackSource.ONLINE
                     uri.startsWith("file:") -> TrackSource.DOWNLOAD
                     else -> TrackSource.LOCAL
@@ -341,6 +385,20 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     val onlineSearch: StateFlow<OnlineSearchState> = _onlineSearch.asStateFlow()
     private var onlineSearchJob: Job? = null
     private var lastOnlineQuery = ""
+
+    private val _audiusDiscovery = MutableStateFlow(AudiusDiscoveryState())
+    val audiusDiscovery: StateFlow<AudiusDiscoveryState> = _audiusDiscovery.asStateFlow()
+    private var audiusDiscoveryJob: Job? = null
+
+    private val _audiusArtist = MutableStateFlow(AudiusArtistState())
+    val audiusArtist: StateFlow<AudiusArtistState> = _audiusArtist.asStateFlow()
+
+    private val _audiusCollection = MutableStateFlow(AudiusCollectionState())
+    val audiusCollection: StateFlow<AudiusCollectionState> = _audiusCollection.asStateFlow()
+
+    /** Provider metadata shown in Ajustes and in the search header. */
+    val providerCatalog: List<ProviderInfo> get() = providers.providers.map { it.info }
+    val providerPlans: List<String> get() = providers.plans
 
     private val _onlineAlbum = MutableStateFlow(OnlineAlbumState())
     val onlineAlbum: StateFlow<OnlineAlbumState> = _onlineAlbum.asStateFlow()
@@ -448,12 +506,21 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         PlayerController.playQueue(tracks, index)
     }
 
+    /**
+     * Keeps streamed catalogue metadata available to the player and the
+     * now-playing screen. Audius tracks are cached too, because they are not
+     * part of the local `allTracks` flow.
+     */
     private fun cacheOnline(tracks: List<Track>) {
-        val online = tracks.filter { it.source == TrackSource.ONLINE }
-        if (online.isEmpty()) return
-        onlineCache.update { cache -> cache + online.associateBy { it.id } }
-        if (onlineCache.value.size > 120) {
-            onlineCache.update { it.entries.toList().takeLast(100).associate { entry -> entry.key to entry.value } }
+        val streaming = tracks.filter {
+            it.source == TrackSource.ONLINE || it.source == TrackSource.AUDIUS
+        }
+        if (streaming.isEmpty()) return
+        onlineCache.update { cache -> cache + streaming.associateBy { it.id } }
+        if (onlineCache.value.size > 160) {
+            onlineCache.update {
+                it.entries.toList().takeLast(140).associate { entry -> entry.key to entry.value }
+            }
         }
     }
 
@@ -652,41 +719,87 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * One query, two catalogues. Audius is the primary full-track provider; the
+     * Deezer preview catalogue remains available as a secondary discovery
+     * source. Each provider is isolated so an Audius outage never hides local
+     * music or the previews.
+     */
     private suspend fun runOnlineSearch(query: String) {
-        if (lastOnlineQuery == query && _onlineSearch.value.searched && _onlineSearch.value.error == null) return
+        if (lastOnlineQuery == query && _onlineSearch.value.searched &&
+            _onlineSearch.value.error == null && _onlineSearch.value.warnings.isEmpty()
+        ) {
+            return
+        }
         lastOnlineQuery = query
         _onlineSearch.value = OnlineSearchState(query = query, loading = true)
-        try {
-            val results = deezer.search(query)
-            val mapped = results.map { it.toTrack() }
-            cacheOnline(mapped)
-            _onlineSearch.value = OnlineSearchState(
-                query = query,
-                loading = false,
-                results = mapped,
-                searched = true
-            )
-            if (results.isEmpty()) {
-                // Nothing to add to history: an empty search is not useful to repeat.
-            } else {
-                settings.addSearchHistory(query)
+
+        val state = withContext(Dispatchers.IO) {
+            coroutineScope {
+                val provider = providers.primary
+                val tracksJob = async { capture { provider.searchTracks(query, 30) } }
+                val artistsJob = async { capture { provider.searchArtists(query, 12) } }
+                val collectionsJob = async { capture { provider.searchCollections(query, 40) } }
+                val previewsJob = async {
+                    capture {
+                        // Deezer omits the preview URL for some tracks; those
+                        // entries cannot be played and must not reach the player.
+                        deezer.search(query, 30)
+                            .filter { it.playable }
+                            .map { it.toTrack() }
+                    }
+                }
+
+                val tracks = tracksJob.await()
+                val artists = artistsJob.await()
+                val collections = collectionsJob.await()
+                val previews = previewsJob.await()
+
+                val warnings = buildList {
+                    artists.exceptionOrNull()?.let {
+                        add("No se pudieron cargar los artistas de Audius.")
+                    }
+                    collections.exceptionOrNull()?.let {
+                        add("No se pudieron cargar álbumes o listas de Audius.")
+                    }
+                    previews.exceptionOrNull()?.let {
+                        add("Las vistas previas de Deezer no están disponibles ahora.")
+                    }
+                }.distinct()
+
+                val audiusFailed = tracks.isFailure && artists.isFailure && collections.isFailure
+                OnlineSearchState(
+                    query = query,
+                    loading = false,
+                    tracks = tracks.getOrDefault(emptyList()),
+                    artists = artists.getOrDefault(emptyList()),
+                    collections = collections.getOrDefault(emptyList()),
+                    previews = previews.getOrDefault(emptyList()),
+                    warnings = warnings,
+                    error = if (audiusFailed) {
+                        tracks.exceptionOrNull()?.message
+                            ?: "Audius no responde. Tus canciones locales siguen disponibles."
+                    } else {
+                        null
+                    },
+                    searched = true
+                )
             }
-        } catch (e: OnlineApiException) {
-            _onlineSearch.value = OnlineSearchState(
-                query = query,
-                loading = false,
-                error = e.message,
-                searched = true
-            )
-        } catch (e: Exception) {
-            _onlineSearch.value = OnlineSearchState(
-                query = query,
-                loading = false,
-                error = "Sin conexión o el buscador no responde. Tus canciones locales siguen disponibles.",
-                searched = true
-            )
         }
+
+        cacheOnline(state.tracks + state.previews)
+        _onlineSearch.value = state
+        if (state.hasAnything) settings.addSearchHistory(query)
     }
+
+    private suspend fun <T> capture(block: suspend () -> T): Result<T> =
+        try {
+            Result.success(block())
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
 
     fun retryOnlineSearch() {
         submitSearch(_onlineSearch.value.query.ifBlank { _searchQuery.value })
@@ -855,6 +968,81 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
+    // ---------------- Audius ----------------
+    /**
+     * Loads a generic Audius chart once per app session. No local history,
+     * favourites or search text is sent: this is the same public trending list
+     * any anonymous visitor receives.
+     */
+    fun loadAudiusDiscovery(force: Boolean = false) {
+        val current = _audiusDiscovery.value
+        if (!force && (current.loaded || current.loading)) return
+        audiusDiscoveryJob?.cancel()
+        _audiusDiscovery.value = current.copy(loading = true, error = null)
+        audiusDiscoveryJob = viewModelScope.launch {
+            try {
+                val tracks = providers.primary.trending(24)
+                cacheOnline(tracks)
+                _audiusDiscovery.value = AudiusDiscoveryState(
+                    loading = false,
+                    tracks = tracks,
+                    loaded = true
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _audiusDiscovery.value = AudiusDiscoveryState(
+                    loading = false,
+                    error = e.message ?: "No se pudieron cargar las tendencias de Audius.",
+                    loaded = true
+                )
+            }
+        }
+    }
+
+    fun refreshAudiusDiscovery() = loadAudiusDiscovery(force = true)
+
+    fun loadAudiusArtist(artistId: String) {
+        if (artistId.isBlank()) return
+        _audiusArtist.value = AudiusArtistState(loading = true)
+        viewModelScope.launch {
+            try {
+                val detail = providers.primary.artist(artistId)
+                cacheOnline(detail.tracks)
+                _audiusArtist.value = AudiusArtistState(detail = detail)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _audiusArtist.value = AudiusArtistState(
+                    error = e.message ?: "No se pudo cargar el artista de Audius."
+                )
+            }
+        }
+    }
+
+    fun loadAudiusCollection(collectionId: String) {
+        if (collectionId.isBlank()) return
+        _audiusCollection.value = AudiusCollectionState(loading = true)
+        viewModelScope.launch {
+            try {
+                val detail = providers.primary.collection(collectionId)
+                cacheOnline(detail.tracks + detail.related)
+                _audiusCollection.value = AudiusCollectionState(detail = detail)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _audiusCollection.value = AudiusCollectionState(
+                    error = e.message ?: "No se pudo cargar la lista de Audius."
+                )
+            }
+        }
+    }
+
+    fun hasProviderDownloads(): Boolean =
+        providers.primary.info.capabilities.contains(
+            com.vibemusic.app.data.provider.ProviderCapability.AUTHORIZED_DOWNLOADS
+        )
 
     // ---------------- Updates ----------------
     fun checkForUpdates(manual: Boolean = true) {

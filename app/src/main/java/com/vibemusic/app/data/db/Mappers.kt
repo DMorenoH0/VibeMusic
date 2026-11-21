@@ -12,7 +12,9 @@ fun Track.toFavorite(now: Long = System.currentTimeMillis()) = FavoriteEntity(
     artworkUri = artworkUri,
     durationMs = durationMs,
     source = source.name,
-    addedAt = now
+    addedAt = now,
+    downloadUrl = downloadUrl,
+    downloadBlockedReason = downloadBlockedReason
 )
 
 fun FavoriteEntity.toTrack() = Track(
@@ -24,7 +26,9 @@ fun FavoriteEntity.toTrack() = Track(
     durationMs = durationMs,
     artworkUri = artworkUri,
     source = runCatching { TrackSource.valueOf(source) }.getOrDefault(TrackSource.LOCAL),
-    addedAt = addedAt
+    addedAt = addedAt,
+    downloadUrl = downloadUrl,
+    downloadBlockedReason = downloadBlockedReason
 )
 
 fun Track.toPlaylistTrack(playlistId: Long, position: Int, now: Long = System.currentTimeMillis()) =
@@ -39,7 +43,9 @@ fun Track.toPlaylistTrack(playlistId: Long, position: Int, now: Long = System.cu
         durationMs = durationMs,
         source = source.name,
         position = position,
-        addedAt = now
+        addedAt = now,
+        downloadUrl = downloadUrl,
+        downloadBlockedReason = downloadBlockedReason
     )
 
 fun PlaylistTrackEntity.toTrack() = Track(
@@ -51,7 +57,9 @@ fun PlaylistTrackEntity.toTrack() = Track(
     durationMs = durationMs,
     artworkUri = artworkUri,
     source = runCatching { TrackSource.valueOf(source) }.getOrDefault(TrackSource.LOCAL),
-    addedAt = addedAt
+    addedAt = addedAt,
+    downloadUrl = downloadUrl,
+    downloadBlockedReason = downloadBlockedReason
 )
 
 fun Track.toRecent(now: Long = System.currentTimeMillis()) = RecentEntity(
@@ -63,7 +71,9 @@ fun Track.toRecent(now: Long = System.currentTimeMillis()) = RecentEntity(
     artworkUri = artworkUri,
     durationMs = durationMs,
     source = source.name,
-    playedAt = now
+    playedAt = now,
+    downloadUrl = downloadUrl,
+    downloadBlockedReason = downloadBlockedReason
 )
 
 fun RecentEntity.toTrack() = Track(
@@ -75,7 +85,9 @@ fun RecentEntity.toTrack() = Track(
     durationMs = durationMs,
     artworkUri = artworkUri,
     source = runCatching { TrackSource.valueOf(source) }.getOrDefault(TrackSource.LOCAL),
-    addedAt = playedAt
+    addedAt = playedAt,
+    downloadUrl = downloadUrl,
+    downloadBlockedReason = downloadBlockedReason
 )
 
 fun DownloadEntity.toTrack() = Track(

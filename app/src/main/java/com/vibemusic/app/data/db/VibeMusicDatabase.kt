@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         DownloadEntity::class,
         ListeningEventEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class VibeMusicDatabase : RoomDatabase() {
@@ -62,6 +62,20 @@ abstract class VibeMusicDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * 3.0 keeps the user's favourites, lists, recent history and downloads
+         * when upgrading from 2.1. The two new nullable columns remember the
+         * provider's download decision without changing existing rows.
+         */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                listOf("favorites", "playlist_tracks", "recent").forEach { table ->
+                    db.execSQL("ALTER TABLE $table ADD COLUMN downloadUrl TEXT")
+                    db.execSQL("ALTER TABLE $table ADD COLUMN downloadBlockedReason TEXT")
+                }
+            }
+        }
+
         fun get(context: Context): VibeMusicDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -69,7 +83,7 @@ abstract class VibeMusicDatabase : RoomDatabase() {
                     VibeMusicDatabase::class.java,
                     "vibemusic.db"
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .fallbackToDestructiveMigration()
                     .build()
                     .also { instance = it }

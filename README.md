@@ -1,19 +1,24 @@
 # VibeMusic
 
-Reproductor de música para Android con interfaz Compose, biblioteca local y un
-buscador de catálogo que reproduce **vistas previas oficiales de 30 segundos**
-de Deezer. Incluye una sección **YouTube** que busca vídeos con YouTube Data
-API v3 y los reproduce dentro de la app con el reproductor oficial embebido
-(YouTube IFrame Player API en un WebView). No extrae audio de plataformas de
-streaming ni descarga canciones completas de catálogos protegidos.
+Reproductor de música para Android con interfaz Compose y biblioteca local que
+integra **Audius** como fuente principal de **canciones completas** mediante su
+API pública oficial. Conserva un buscador secundario con **vistas previas
+oficiales de 30 segundos** de Deezer y una sección **YouTube** que busca vídeos
+con YouTube Data API v3 y los reproduce con el reproductor oficial embebido
+(YouTube IFrame Player API en un WebView). No extrae audio de YouTube, Spotify,
+Deezer ni otras plataformas, no elude condiciones de acceso y solo descarga
+audio cuando el proveedor autoriza esa pista.
 
-La versión **2.1.0** añade la descarga con **un solo toque** para canciones con
-fuente autorizada, un menú contextual completo (añadir a lista, quitar de la
-lista, quitar de Canciones que te gustan, añadir al final de la cola y descargar)
-en toda la app, indicadores de descarga y avisos claros cuando una fuente no
-permite guardar el audio. Mantiene las cinco pestañas, las recomendaciones
-locales (**Para ti**), las descargas reanudables, los perfiles de audio, el
-ecualizador con 12 presets y las listas ampliadas de 2.0.
+La versión **3.0.0** convierte el catálogo en una experiencia unificada: una sola
+búsqueda devuelve canciones completas, artistas, álbumes y listas de Audius, con
+pantallas de detalle propias y reproducción real; las vistas previas de Deezer
+quedan como fuente secundaria etiquetada. Añade descargas de Audius con un solo
+toque **solo si la API declara la pista descargable y sin condiciones
+pendientes**, con portada, metadatos, progreso, velocidad, tamaño, ETA,
+cancelación y reanudación, o un motivo claro cuando no está permitida. Mantiene
+las cinco pestañas, las recomendaciones locales (**Para ti**), las descargas
+reanudables, los perfiles de audio, el ecualizador con 12 presets y las listas de
+2.x. La base de datos migra de 2 a 3 sin borrar favoritos, listas ni historial.
 
 ## Funciones
 
@@ -43,17 +48,22 @@ ecualizador con 12 presets y las listas ampliadas de 2.0.
 - Persistencia con Room: favoritos, listas, descargas e historial.
 - Temporizador de sueño.
 
-### Buscador local y online
+### Buscador unificado
+- Una sola búsqueda agrega **Audius** (fuente principal) y **Deezer** (vistas
+  previas), con secciones separadas y etiquetadas por origen.
+- Audius devuelve canciones completas, artistas, álbumes y listas reales de su
+  API v1 (`api.audius.co/v1`), sin clave para lecturas públicas.
+- Pantallas de detalle de artista, álbum y lista de Audius con portada, biografía,
+  seguidores, pistas, álbumes/listas relacionadas y reproducción completa.
 - Búsqueda por título, artista y álbum en la biblioteca del dispositivo.
-- Búsqueda en el catálogo público de Deezer con portada, artista, álbum y
-  duración.
 - Sugerencias e historial de búsquedas borrable.
-- Acciones por resultado: reproducir vista previa, reproducir a continuación,
-  añadir al final de la cola, ver álbum y ver artista. El menú explica que la
-  vista previa no se puede descargar.
-- Pantallas de álbum y artista online con listas reales de Deezer.
-- Estados de carga, vacío y error, con textos en español.
-- Las vistas previas **no** se guardan en favoritos, listas ni historial.
+- Acciones por resultado: reproducir, reproducir a continuación, añadir al final
+  de la cola, ver álbum, ver artista, favoritos, listas y descarga autorizada.
+- Favoritos, listas e historial aceptan pistas de Audius; las vistas previas de
+  Deezer siguen sin persistirse.
+- Estados de carga, vacío, error y reintento con textos en español.
+- Caché en memoria con TTL para búsquedas, tendencias y detalles; los errores
+  401/403/404/429/5xx se traducen a mensajes claros.
 
 ### Samples
 - Pestaña **Samples** con las seis instrumentales originales incluidas en la
@@ -108,8 +118,14 @@ ecualizador con 12 presets y las listas ampliadas de 2.0.
   resuelve la fuente autorizada y toma título, artista, álbum, portada y
   duración sin pedir URL ni metadatos.
 - Fuentes admitidas: las seis instrumentales propias incluidas en la app y las
-  pistas de proveedores que expongan un `downloadUrl` HTTPS con derechos de
-  descarga. No hay scraping ni extracción de audio de YouTube.
+  pistas de Audius (o de otro proveedor) que expongan un `downloadUrl` HTTPS con
+  derechos de descarga. No hay scraping ni extracción de audio de YouTube,
+  Spotify ni Deezer.
+- En Audius se consultan los campos reales `is_downloadable`,
+  `is_download_gated`, `access.download` y `download_conditions`. Solo se ofrece
+  la descarga cuando el artista la autoriza; si requiere compra en USDC, seguir
+  al artista, un NFT, un token u otra condición, se muestra «Descarga no
+  disponible» con el motivo y no se intenta omitir.
 - Las vistas previas de Deezer (licencia de reproducción), las referencias de
   YouTube y los archivos locales ya disponibles se muestran como **no
   disponibles para descarga offline**, con el motivo visible.
@@ -312,7 +328,12 @@ y géneros, fuerza de la señal) y 4 de los presets del ecualizador (12 nombres
 Desde 2.1.0 se añaden 9 pruebas del resolutor de descargas (muestra propia,
 duplicados por clave e identidad, Deezer, YouTube, archivo local, URL autorizada
 y claves estables).
-En total son **65 pruebas unitarias** en 10 suites.
+Desde 3.0.0 se añaden 12 pruebas de Audius (pista real, artista, álbum, lista,
+portada, metadatos, pista no descargable, compra en USDC, seguir al artista,
+acceso de descarga desactivado, stream con puerta y campos ausentes) y 4 pruebas
+del resolutor para descargas de Audius (URL autorizada, motivo visible, rechazo
+sin archivo y clave estable).
+En total son **81 pruebas unitarias** en 11 suites, todas correctas.
 
 En el emulador API 37 se han probado además la barra inferior de cuatro
 apartados (a 411 dp y a 360 dp de ancho), Samples, el buscador online de Deezer,
@@ -369,8 +390,13 @@ conservaron, y la descarga de un toque funcionó en el APK publicado.
 
 ## Arquitectura
 
-- `data/`: Room (v2 con migración desde 1.x), MediaStore, descargas, ajustes,
-  CSV, Deezer, GitHub, Google y YouTube Data API v3 (`data/youtube`).
+- `data/`: Room (v3 con migración desde 1.x y 2.x), MediaStore, descargas,
+  ajustes, CSV, Deezer, GitHub, Google y YouTube Data API v3 (`data/youtube`).
+- `data/audius/`: modelos, parsers puros y cliente de la API oficial de Audius
+  con caché TTL, reintentos y traducción de errores.
+- `data/provider/`: contrato `MusicProvider`, registro y `AudiusProvider`. Un
+  futuro proveedor (por ejemplo Tuned Global) solo implementa la interfaz; no se
+  simula ninguna conexión comercial ni se incluyen credenciales.
 - `data/recommend/`: motor local y determinista de recomendaciones, sin red.
 - `audio/`: detección de salida Bluetooth, perfiles por dispositivo y
   ecualizador global (`EqualizerController`, `EqPresets`).
@@ -418,6 +444,17 @@ API 37:
   favoritos, listas con duplicados y «Quitar de esta lista», menú contextual en
   búsqueda, online, Descargas, lista y «Para ti», y eliminación segura de la
   descarga sin tocar archivos ajenos.
+- 3.0.0: búsqueda unificada real con Audius (pistas completas, artistas, álbumes
+  y listas) y Deezer (vistas previas), reproducción completa de una pista de
+  Audius, pantallas de artista y álbum con biografía, seguidores, pistas y
+  relacionadas, favorito y lista con una pista de Audius, descarga autorizada de
+  «Relevant Future» (79,2 MB), «Liquor & Cigarettes» (26,2 MB) y «UNO DOS»
+  (45,4 MB) con portada y metadatos originales, rechazo de «The Search» por
+  compra en USDC, rechazo de una pista no descargable, cancelación de «UNO DOS»
+  con 4,1 MB parciales, reanudación hasta completar, reproducción sin conexión
+  tras reiniciar la app y del emulador, y persistencia de favoritos, listas y
+  descargas. También se comprobó que una vista previa de Deezer con URL válida
+  sigue sonando y que una vista previa sin URL ya no llega al reproductor.
 - Actualización: se instaló el APK publicado de 1.1.0 y después el de 1.2.0
   firmado con el mismo certificado, sin desinstalar y conservando los datos.
   El APK que publica CI tiene el mismo keystore estable. En 1.2.2 se comprobó
@@ -447,8 +484,20 @@ queda operativo sin recompilar.
   versión de Android System WebView del dispositivo. Si YouTube cambia sus
   requisitos de origen, la app muestra el error correspondiente en lugar de
   abrir una app externa.
-- El buscador online reproduce únicamente vistas previas de 30 segundos; no hay
-  reproducción completa ni descarga de canciones de Deezer.
+- Las canciones de Deezer siguen siendo vistas previas de 30 segundos; no hay
+  reproducción completa ni descarga de Deezer. Las canciones completas y sus
+  descargas pertenecen a Audius y solo se ofrecen cuando su API las autoriza.
+- Audius requiere conexión para buscar y reproducir en streaming. Sin conexión
+  solo se pueden reproducir las pistas descargadas previamente.
+- Las pistas con compra en USDC, seguimiento al artista, NFT, token u otra
+  condición de descarga se muestran como no disponibles; VibeMusic no procesa
+  pagos, no crea cuentas de Audius y no omite esas condiciones.
+- El endpoint oficial de «relacionadas» de Audius respondió 404 durante la
+  verificación; las recomendaciones se construyen con pistas del mismo artista,
+  género y tendencias usando solo endpoints oficiales.
+- Tuned Global no está conectado. La interfaz `MusicProvider` está preparada
+  para integrarlo cuando exista un acuerdo y credenciales, sin simular el
+  servicio ni incluir claves.
 - El ecualizador usa la sesión global de audio. Funciona en el emulador API 37
   con 5 bandas reales, pero algunos fabricantes no exponen efectos globales; en
   ese caso la app lo indica y no simula que los sliders tengan efecto. No hay
@@ -461,9 +510,14 @@ queda operativo sin recompilar.
 - Las funciones nuevas se han probado en emulador API 37; no se han probado en
   un teléfono físico (incluido el Vivo V40 SE) ni con auriculares o altavoces
   Bluetooth reales.
-- Las descargas solo aceptan URLs HTTPS directas; no hay scraping ni extracción
-  de audio de YouTube. La reanudación depende de que el servidor acepte `Range`.
-- No se ofrece un catálogo comercial ilimitado.
+- Las descargas de Audius usan únicamente su endpoint oficial de descarga y las
+  condiciones declaradas por la API. El formulario manual solo acepta URLs HTTPS
+  directas que el usuario tenga derecho a usar. No hay scraping ni extracción de
+  audio de YouTube, Spotify ni Deezer. La reanudación depende de que el servidor
+  acepte `Range`.
+- El catálogo depende de la disponibilidad y latencia de Audius y Deezer; no se
+  ofrece un catálogo comercial ilimitado ni se garantiza que una pista siga
+  publicada.
 - El inicio de sesión con Google requiere configurar un ID de cliente OAuth.
 - La firma de la versión 1.0.2 se generó con un keystore debug efímero del
   runner de CI y su clave privada no existe en el repositorio. Por eso las

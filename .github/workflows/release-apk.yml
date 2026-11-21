@@ -95,6 +95,16 @@ jobs:
           echo "value=$SHA" >> "$GITHUB_OUTPUT"
           echo "SHA-256: $SHA"
 
+      - name: Package source and checksum
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          VERSION="${{ steps.build.outputs.version }}"
+          echo "${{ steps.hash.outputs.value }}  VibeMusic.apk" > release/VibeMusic.apk.sha256
+          zip -r "release/VibeMusic-${VERSION}-source.zip" . \
+            -x ".git/*" ".gradle/*" ".idea/*" "*/build/*" "build/*" "release/*" \
+               "local.properties" "*.log" "*.jks" "*.keystore"
+          ls -l release
+
       - name: Verify APK signature
         run: |
           APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
@@ -120,19 +130,23 @@ jobs:
 
             Descarga VibeMusic.apk y ábrelo en tu dispositivo Android.
             VibeMusic comprueba este hash antes de ofrecer la instalación.
+            También se adjuntan el archivo de suma SHA-256 y el código fuente
+            limpio en VibeMusic-3.0.0-source.zip (sin build, .git ni secretos).
 
-            Novedades de VibeMusic 2.1:
-            - «Descargar canción» con un solo toque desde el menú de cada canción: fuente autorizada, portada, metadatos y duración sin pedir URL ni datos.
-            - Menú contextual completo en búsqueda, YouTube, biblioteca local, descargas, listas, favoritos y «Para ti».
-            - Añadir a la cola al final sin interrumpir, reproducir a continuación, quitar de esta lista y quitar de Canciones que te gustan.
-            - Indicadores de descarga completada, en curso y fallida en cada fila.
-            - Avisos claros cuando una fuente no permite descarga offline; el formulario manual queda como opción avanzada para enlaces HTTPS autorizados.
+            Novedades de VibeMusic 3.0:
+            - Audius como fuente principal de canciones completas con su API oficial v1: búsqueda de pistas, artistas, álbumes y listas, reproducción completa y pantallas de detalle.
+            - Buscador unificado con Audius y las vistas previas de Deezer como fuente secundaria etiquetada.
+            - Descarga autorizada con un solo toque solo cuando la API de Audius declara la pista descargable y sin condiciones pendientes; portada y metadatos originales, progreso, velocidad, ETA, cancelación y reanudación.
+            - Motivos claros cuando la descarga no está disponible: artista sin autorización, descarga desactivada, compra en USDC, seguir al artista, NFT o token.
+            - Pistas de Audius en favoritos, listas, historial, cola, reproductor y biblioteca; migración aditiva de base de datos 2→3.
 
-            Se mantienen las funciones de 2.0: cinco pestañas, «Para ti» local, descargas con progreso/cancelación/reanudación, biblioteca offline, perfiles de audio y ecualizador con 12 presets, listas ampliadas y migración de base de datos 1→2.
+            Se mantienen las funciones de 2.x: cinco pestañas, «Para ti» local, descargas reanudables, biblioteca offline, perfiles de audio, ecualizador con 12 presets y listas.
 
             Limitaciones honestas:
-            - Las descargas solo aceptan archivos HTTPS directos o archivos propios autorizados; no se extrae audio de YouTube.
             - Las vistas previas de Deezer tienen licencia de reproducción, no de descarga, y se muestran como no disponibles.
+            - Audius requiere conexión para streaming; sin conexión solo se reproducen las descargas autorizadas.
+            - No se procesan pagos ni se eluden condiciones de acceso de Audius.
+            - Tuned Global no está conectado; la interfaz de proveedores está preparada para una futura integración.
             - El ecualizador depende de que el fabricante exponga efectos globales; si no, la app lo indica.
             - El códec Bluetooth y el modelo exacto no son APIs públicas; no se inventan.
             - Probado en emulador API 37; no hay pruebas en teléfono físico ni con dispositivos Bluetooth reales.
@@ -142,7 +156,10 @@ jobs:
             que se instala como actualización normal. La versión 1.0.2 se firmó
             con un keystore debug efímero del runner de CI y su clave no se
             conserva; si vienes de ella, desinstala una vez antes de instalar.
-          files: release/VibeMusic.apk
+          files: |
+            release/VibeMusic.apk
+            release/VibeMusic.apk.sha256
+            release/VibeMusic-${{ steps.build.outputs.version }}-source.zip
           draft: false
           prerelease: false
           make_latest: true

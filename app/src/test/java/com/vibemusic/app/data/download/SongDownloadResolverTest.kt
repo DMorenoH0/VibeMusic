@@ -14,7 +14,8 @@ class SongDownloadResolverTest {
         title: String = "Afterglow",
         artist: String = "Luna Vale",
         uri: String = "file:///data/user/0/com.vibemusic.app/files/demo/afterglow.wav",
-        downloadUrl: String? = null
+        downloadUrl: String? = null,
+        downloadBlockedReason: String? = null
     ) = Track(
         id = id,
         uri = uri,
@@ -23,7 +24,8 @@ class SongDownloadResolverTest {
         album = "Afterglow",
         durationMs = 40_000L,
         source = source,
-        downloadUrl = downloadUrl
+        downloadUrl = downloadUrl,
+        downloadBlockedReason = downloadBlockedReason
     )
 
     @Test
@@ -139,6 +141,73 @@ class SongDownloadResolverTest {
         assertEquals("demo:crimson_drive", SongDownloadResolver.keyFor(demo))
         assertEquals("https://provider.example/a.mp3", SongDownloadResolver.keyFor(direct))
         assertEquals(null, SongDownloadResolver.keyFor(preview))
+    }
+
+    @Test
+    fun `audius authorised download keeps identity metadata and artwork`() {
+        val audius = track(
+            id = "audius:track:492515762",
+            source = TrackSource.AUDIUS,
+            title = "Dance With The Afterglow",
+            artist = "Luna Vale",
+            uri = "https://api.audius.co/v1/tracks/492515762/stream?app_name=VibeMusic",
+            downloadUrl = "https://api.audius.co/v1/tracks/492515762/download?app_name=VibeMusic"
+        ).copy(artworkUri = "https://creatornode.audius.co/artwork/cover.jpg")
+
+        val availability = SongDownloadResolver.resolve(audius)
+
+        assertTrue(availability is SongDownloadAvailability.Available)
+        val request = (availability as SongDownloadAvailability.Available).request
+        assertEquals(
+            "https://api.audius.co/v1/tracks/492515762/download?app_name=VibeMusic",
+            request.url
+        )
+        assertEquals("audius:track:492515762", request.trackId)
+        assertEquals("https://creatornode.audius.co/artwork/cover.jpg", request.artworkUrl)
+        assertEquals("Dance With The Afterglow", request.title)
+    }
+
+    @Test
+    fun `audius gated download shows the provider reason and no request`() {
+        val reason = "El artista pide que lo sigas en Audius antes de descargar."
+        val audius = track(
+            id = "audius:track:7",
+            source = TrackSource.AUDIUS,
+            uri = "https://api.audius.co/v1/tracks/7/stream?app_name=VibeMusic",
+            downloadBlockedReason = reason
+        )
+
+        val availability = SongDownloadResolver.resolve(audius)
+
+        assertTrue(availability is SongDownloadAvailability.Unavailable)
+        val unavailable = availability as SongDownloadAvailability.Unavailable
+        assertEquals(reason, unavailable.reason)
+        assertEquals("Descarga no disponible", unavailable.label)
+    }
+
+    @Test
+    fun `audius without an authorised file is rejected`() {
+        val audius = track(
+            id = "audius:track:8",
+            source = TrackSource.AUDIUS,
+            uri = "https://api.audius.co/v1/tracks/8/stream?app_name=VibeMusic"
+        )
+        val availability = SongDownloadResolver.resolve(audius)
+
+        assertTrue(availability is SongDownloadAvailability.Unavailable)
+        assertTrue(
+            (availability as SongDownloadAvailability.Unavailable).reason.contains("autorizado")
+        )
+    }
+
+    @Test
+    fun `audius id is the stable download key`() {
+        val audius = track(
+            id = "audius:track:9",
+            source = TrackSource.AUDIUS,
+            downloadUrl = "https://api.audius.co/v1/tracks/9/download?app_name=VibeMusic"
+        )
+        assertEquals("audius:track:9", SongDownloadResolver.keyFor(audius))
     }
 
     @Test

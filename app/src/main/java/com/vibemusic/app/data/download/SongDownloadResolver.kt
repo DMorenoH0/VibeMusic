@@ -38,6 +38,8 @@ object SongDownloadResolver {
     /** Stable key used to remember that a song was already downloaded. */
     fun keyFor(track: Track): String? = when {
         track.source == TrackSource.DEMO -> track.id
+        // Audius ids survive URL signing and token rotation.
+        track.source == TrackSource.AUDIUS -> track.id
         !track.downloadUrl.isNullOrBlank() -> track.downloadUrl.trim()
         else -> null
     }
@@ -60,6 +62,38 @@ object SongDownloadResolver {
         val key = keyFor(track)
         if (key != null && key in downloadedKeys) return SongDownloadAvailability.Downloaded()
         if (track.source == TrackSource.DOWNLOAD) return SongDownloadAvailability.Downloaded()
+
+        if (track.source == TrackSource.AUDIUS) {
+            val blocked = track.downloadBlockedReason?.trim().orEmpty()
+            if (blocked.isNotEmpty()) {
+                return SongDownloadAvailability.Unavailable(
+                    reason = blocked,
+                    label = "Descarga no disponible"
+                )
+            }
+            val direct = track.downloadUrl?.trim().orEmpty()
+            if (!direct.startsWith("https://", ignoreCase = true)) {
+                return SongDownloadAvailability.Unavailable(
+                    reason = "Audius no ofrece un archivo autorizado para esta pista.",
+                    label = "Descarga no disponible"
+                )
+            }
+            if (identity(track) in downloadedIdentities) {
+                return SongDownloadAvailability.Downloaded()
+            }
+            return SongDownloadAvailability.Available(
+                request = DownloadRequest(
+                    url = direct,
+                    title = track.title,
+                    artist = track.artist,
+                    album = track.album,
+                    artworkUrl = track.artworkUri,
+                    quality = quality,
+                    wifiOnly = wifiOnly,
+                    trackId = track.id
+                )
+            )
+        }
 
         val direct = track.downloadUrl?.trim().orEmpty()
         if (direct.startsWith("https://", ignoreCase = true) &&
@@ -118,6 +152,11 @@ object SongDownloadResolver {
             TrackSource.ONLINE -> SongDownloadAvailability.Unavailable(
                 reason = "Las vistas previas de Deezer tienen licencia de reproducción, " +
                     "no de descarga. No se pueden guardar como archivo."
+            )
+
+            TrackSource.AUDIUS -> SongDownloadAvailability.Unavailable(
+                reason = "Audius no ofrece un archivo autorizado para esta pista.",
+                label = "Descarga no disponible"
             )
 
             TrackSource.YOUTUBE -> SongDownloadAvailability.Unavailable(

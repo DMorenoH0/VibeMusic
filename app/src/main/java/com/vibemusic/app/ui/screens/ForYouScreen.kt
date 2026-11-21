@@ -28,6 +28,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vibemusic.app.data.model.Track
 import com.vibemusic.app.data.recommend.RecommendationSection
+import com.vibemusic.app.ui.components.AudiusTrackRail
 import com.vibemusic.app.ui.components.EmptyState
 import com.vibemusic.app.ui.components.TrackRow
 import com.vibemusic.app.ui.components.VibePageBackground
@@ -61,6 +63,9 @@ fun ForYouScreen(
 ) {
     val sections by vm.forYouSections.collectAsStateWithLifecycle()
     val enabled by vm.recommendationsEnabled.collectAsStateWithLifecycle()
+    val audius by vm.audiusDiscovery.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) { vm.loadAudiusDiscovery() }
 
     VibePageBackground {
         LazyColumn(
@@ -122,6 +127,20 @@ fun ForYouScreen(
                 item {
                     PrivacyNote()
                 }
+            }
+
+            item {
+                AudiusTrackRail(
+                    title = "Descubre en Audius",
+                    tracks = audius.tracks,
+                    loading = audius.loading,
+                    error = audius.error,
+                    onRetry = vm::refreshAudiusDiscovery,
+                    onPlay = { track ->
+                        vm.playFromList(audius.tracks, track)
+                        onOpenPlayer()
+                    }
+                )
             }
         }
     }

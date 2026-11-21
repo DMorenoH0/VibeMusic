@@ -199,6 +199,20 @@ fun TrackRow(
             }
             Spacer(Modifier.width(4.dp))
         }
+        if (track.source == com.vibemusic.app.data.model.TrackSource.AUDIUS) {
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = VibeRed.copy(alpha = 0.16f)
+            ) {
+                Text(
+                    "Audius",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = VibeRed,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
+            Spacer(Modifier.width(4.dp))
+        }
         val download = LocalTrackDownloadUi.current(track)
         when {
             download.active -> {

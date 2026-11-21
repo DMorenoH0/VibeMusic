@@ -8,6 +8,9 @@ enum class TrackSource {
     /** Streaming preview resolved through a public catalogue API. */
     ONLINE,
 
+    /** Full-length track streamed from Audius under its open catalogue terms. */
+    AUDIUS,
+
     /** Reference to a YouTube video played by the official embedded player. */
     YOUTUBE
 }
@@ -37,7 +40,13 @@ data class Track(
      * only set by catalogue entries that grant those rights; preview-only
      * streams and YouTube references leave it null.
      */
-    val downloadUrl: String? = null
+    val downloadUrl: String? = null,
+    /**
+     * Why the provider does not authorise an offline copy. It is shown instead
+     * of a download button so the user never starts a transfer that the rights
+     * holder has not allowed.
+     */
+    val downloadBlockedReason: String? = null
 ) {
     val subtitle: String
         get() = when {
@@ -53,8 +62,9 @@ data class Track(
             source == TrackSource.IMPORTED
 
     /**
-     * Online preview URLs expire and are not backed by a local file, so they are
-     * never written to favourites, playlists or the recent history.
+     * Deezer preview URLs expire and are not backed by a local file, so they
+     * are never written to favourites, playlists or the recent history. Audius
+     * tracks use a stable catalogue id and endpoint, so they can be saved.
      */
     val isPersistable: Boolean
         get() = source != TrackSource.ONLINE && uri.isNotBlank()

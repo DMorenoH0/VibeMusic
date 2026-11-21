@@ -688,6 +688,41 @@ fun SettingsScreen(
                 }
             }
 
+            // ---------------- Providers ----------------
+            item { SectionHeader("Fuentes de música") }
+            item {
+                SettingsCard {
+                    vm.providerCatalog.forEachIndexed { index, provider ->
+                        if (index > 0) SectionDivider()
+                        Column(Modifier.padding(16.dp)) {
+                            Text(
+                                provider.displayName,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = VibeCream
+                            )
+                            Text(
+                                provider.description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = VibeMuted
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                provider.legalNote,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = VibeMuted
+                            )
+                        }
+                    }
+                    SectionDivider()
+                    Text(
+                        vm.providerPlans.joinToString("\n"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = VibeMuted,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+            }
+
             // ---------------- Privacy ----------------
             item { SectionHeader("Privacidad y datos") }
             item {

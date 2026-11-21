@@ -32,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -50,6 +51,7 @@ import com.vibemusic.app.data.model.Track
 import com.vibemusic.app.data.model.TrackSource
 import com.vibemusic.app.ui.AlbumGroup
 import com.vibemusic.app.ui.components.AlbumCard
+import com.vibemusic.app.ui.components.AudiusTrackRail
 import com.vibemusic.app.ui.components.CompactTrackCard
 import com.vibemusic.app.ui.components.CoverArt
 import com.vibemusic.app.ui.components.EmptyState
@@ -84,6 +86,9 @@ fun HomeScreen(
     val player by vm.playerState.collectAsStateWithLifecycle()
     val scanState by vm.scanState.collectAsStateWithLifecycle()
     val initializing by vm.initializing.collectAsStateWithLifecycle()
+    val audius by vm.audiusDiscovery.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) { vm.loadAudiusDiscovery() }
 
     val albums = remember(tracks) { groupAlbums(tracks) }
     val demos = remember(tracks) { tracks.filter { it.source == TrackSource.DEMO } }
@@ -194,6 +199,20 @@ fun HomeScreen(
                         }
                     }
                 }
+            }
+
+            item {
+                AudiusTrackRail(
+                    title = "Tendencias en Audius",
+                    tracks = audius.tracks,
+                    loading = audius.loading,
+                    error = audius.error,
+                    onRetry = vm::refreshAudiusDiscovery,
+                    onPlay = { track ->
+                        vm.playFromList(audius.tracks, track)
+                        onOpenPlayer()
+                    }
+                )
             }
 
             if (albums.isNotEmpty()) {

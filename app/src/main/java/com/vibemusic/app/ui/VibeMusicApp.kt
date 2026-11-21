@@ -58,6 +58,8 @@ import com.vibemusic.app.ui.screens.DownloadsScreen
 import com.vibemusic.app.ui.screens.ExploreScreen
 import com.vibemusic.app.ui.screens.ForYouScreen
 import com.vibemusic.app.ui.screens.HomeScreen
+import com.vibemusic.app.ui.screens.AudiusArtistScreen
+import com.vibemusic.app.ui.screens.AudiusCollectionScreen
 import com.vibemusic.app.ui.screens.LegalScreen
 import com.vibemusic.app.ui.screens.LibraryScreen
 import com.vibemusic.app.ui.screens.NowPlayingScreen
@@ -307,7 +309,9 @@ fun VibeMusicApp(vm: VibeViewModel) {
                             actionTrack = track
                         },
                         onOpenOnlineAlbum = { id -> route = "onlineAlbum:$id" },
-                        onOpenOnlineArtist = { id -> route = "onlineArtist:$id" }
+                        onOpenOnlineArtist = { id -> route = "onlineArtist:$id" },
+                        onOpenAudiusArtist = { id -> route = "audiusArtist:$id" },
+                        onOpenAudiusCollection = { id -> route = "audiusCollection:$id" }
                     )
 
                     3 -> LibraryScreen(
@@ -410,7 +414,9 @@ fun VibeMusicApp(vm: VibeViewModel) {
                         actionTrack = track
                     },
                     onOpenOnlineAlbum = { id -> route = "onlineAlbum:$id" },
-                    onOpenOnlineArtist = { id -> route = "onlineArtist:$id" }
+                    onOpenOnlineArtist = { id -> route = "onlineArtist:$id" },
+                    onOpenAudiusArtist = { id -> route = "audiusArtist:$id" },
+                    onOpenAudiusCollection = { id -> route = "audiusCollection:$id" }
                 )
             }
 
@@ -509,6 +515,40 @@ fun VibeMusicApp(vm: VibeViewModel) {
                             actionTrack = track
                         },
                         onOpenArtist = { id -> route = "onlineArtist:$id" }
+                    )
+                }
+            }
+
+            route?.startsWith("audiusArtist:") == true -> {
+                val artistId = route.orEmpty().removePrefix("audiusArtist:")
+                Box(overlayModifier) {
+                    AudiusArtistScreen(
+                        vm = vm,
+                        artistId = artistId,
+                        onBack = { route = null },
+                        onOpenPlayer = { route = "player" },
+                        onTrackMore = { track ->
+                            actionPlaylistId = null
+                            actionTrack = track
+                        },
+                        onOpenCollection = { id -> route = "audiusCollection:$id" }
+                    )
+                }
+            }
+
+            route?.startsWith("audiusCollection:") == true -> {
+                val collectionId = route.orEmpty().removePrefix("audiusCollection:")
+                Box(overlayModifier) {
+                    AudiusCollectionScreen(
+                        vm = vm,
+                        collectionId = collectionId,
+                        onBack = { route = null },
+                        onOpenPlayer = { route = "player" },
+                        onTrackMore = { track ->
+                            actionPlaylistId = null
+                            actionTrack = track
+                        },
+                        onOpenArtist = { id -> route = "audiusArtist:$id" }
                     )
                 }
             }
@@ -677,13 +717,37 @@ fun VibeMusicApp(vm: VibeViewModel) {
                     actionPlaylistId = null
                     showCreatePlaylist = true
                 },
-                onOpenAlbum = if (track.album.isBlank()) null else {
+                onOpenAlbum = when {
+                    track.source == TrackSource.AUDIUS && !track.albumId.isNullOrBlank() -> {
+                        {
+                            val collectionId = track.albumId
+                            actionTrack = null
+                            actionPlaylistId = null
+                            route = "audiusCollection:$collectionId"
+                        }
+                    }
+                    track.source == TrackSource.AUDIUS -> null
+                    track.album.isBlank() -> null
+                    else -> {
+                        {
+                            val album = track.album
+                            actionTrack = null
+                            actionPlaylistId = null
+                            route = "album:$album"
+                        }
+                    }
+                },
+                onOpenArtist = if (track.source == TrackSource.AUDIUS &&
+                    !track.artistId.isNullOrBlank()
+                ) {
                     {
-                        val album = track.album
+                        val artistId = track.artistId
                         actionTrack = null
                         actionPlaylistId = null
-                        route = "album:$album"
+                        route = "audiusArtist:$artistId"
                     }
+                } else {
+                    null
                 },
                 download = SongDownloadResolver.resolve(
                     track = track,

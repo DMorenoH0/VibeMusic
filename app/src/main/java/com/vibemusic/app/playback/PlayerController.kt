@@ -220,6 +220,9 @@ object PlayerController {
         }
         if (tracks.isEmpty()) return
         val safeIndex = startIndex.coerceIn(0, tracks.lastIndex)
+        // A new queue replaces the failed item: drop the previous error so the
+        // player UI does not show a stale "file unavailable" banner.
+        _state.update { it.copy(error = null) }
         player.setMediaItems(tracks.map(::toMediaItem), safeIndex, 0L)
         player.prepare()
         player.play()
