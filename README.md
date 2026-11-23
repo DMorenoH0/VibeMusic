@@ -232,6 +232,19 @@ reanudables, los perfiles de audio, el ecualizador con 12 presets y las listas d
   guarda el perfil (identificador, nombre y correo); el token no se almacena.
   Sin un ID de cliente OAuth configurado, la app lo indica y no envía datos.
 
+## Descarga
+
+- APK firmado de la versión **3.0.0**:
+  <https://github.com/DMorenoH0/VibeMusic/releases/download/v3.0.0/VibeMusic.apk>
+- SHA-256 del APK:
+  `bf54cf1b6b4a48287e80bf42205fdede0c43b0ff4ba45be22907bc8ce37e4856`
+- Certificado de firma SHA-256 (el mismo desde 1.1.0):
+  `c66fddabfae51026cbf504c60d85354ecec18059bd6ac613729fb0327db57e45`
+- Código fuente limpio sin `build/`, `.git/` ni secretos:
+  <https://github.com/DMorenoH0/VibeMusic/releases/download/v3.0.0/VibeMusic-3.0.0-source.zip>
+- Notas y limitaciones:
+  <https://github.com/DMorenoH0/VibeMusic/releases/tag/v3.0.0>
+
 ## Requisitos
 
 - Android 7.0 (API 24) o superior.
@@ -387,6 +400,18 @@ porque no hay clave de API en este entorno.
 La actualización 2.0.0 → 2.1.0 se instaló sin desinstalar con el APK firmado del
 release: `firstInstallTime` no cambió, el favorito y la lista creados en 2.0.0 se
 conservaron, y la descarga de un toque funcionó en el APK publicado.
+
+La actualización **2.1.0 → 3.0.0** se instaló sin desinstalar usando el APK
+publicado en GitHub: `firstInstallTime` se mantuvo, la lista «Upgrade Test» con
+su canción y el favorito creados en 2.1.0 siguieron visibles, y la base de datos
+migró de la versión 2 a la 3 con las columnas nuevas de descarga. En el APK de
+release se verificaron además la búsqueda de Audius, la reproducción completa de
+«Xsetra - Fragments» (3:32), la descarga autorizada de «UNO DOS» con 45,4 MB,
+progreso y ETA, la reproducción sin conexión tras reiniciar y la ausencia de
+errores en la sesión multimedia. El APK descargado tiene SHA-256
+`bf54cf1b6b4a48287e80bf42205fdede0c43b0ff4ba45be22907bc8ce37e4856` y el
+certificado de firma estable
+`c66fddabfae51026cbf504c60d85354ecec18059bd6ac613729fb0327db57e45`.
 
 ## Arquitectura
 
