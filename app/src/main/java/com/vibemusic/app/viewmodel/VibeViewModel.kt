@@ -14,6 +14,7 @@ import com.vibemusic.app.data.ScanState
 import com.vibemusic.app.data.SettingsStore
 import com.vibemusic.app.data.auth.AuthException
 import com.vibemusic.app.data.auth.GoogleAuthManager
+import com.vibemusic.app.data.audius.AudiusService
 import com.vibemusic.app.data.csv.CsvColumnRole
 import com.vibemusic.app.data.csv.CsvMatch
 import com.vibemusic.app.data.csv.CsvMatchResult
@@ -44,6 +45,24 @@ import com.vibemusic.app.data.online.OnlineAlbum
 import com.vibemusic.app.data.online.OnlineApiException
 import com.vibemusic.app.data.online.OnlineArtist
 import com.vibemusic.app.data.online.OnlineTrack
+import com.vibemusic.app.data.playlistimport.AudiusTrackCatalog
+import com.vibemusic.app.data.playlistimport.ImportedPlaylist
+import com.vibemusic.app.data.playlistimport.ImportedPlaylistEntry
+import com.vibemusic.app.data.playlistimport.ImportStatus
+import com.vibemusic.app.data.playlistimport.MatchSensitivity
+import com.vibemusic.app.data.playlistimport.PlaylistImportAnalyzer
+import com.vibemusic.app.data.playlistimport.PlaylistImportItem
+import com.vibemusic.app.data.playlistimport.PlaylistImportReducer
+import com.vibemusic.app.data.playlistimport.PlaylistLink
+import com.vibemusic.app.data.playlistimport.PlaylistLinkParser
+import com.vibemusic.app.data.playlistimport.PlaylistLinkResult
+import com.vibemusic.app.data.playlistimport.PlaylistPlatform
+import com.vibemusic.app.data.playlistimport.SpotifyCredentialStore
+import com.vibemusic.app.data.playlistimport.SpotifyCredentials
+import com.vibemusic.app.data.playlistimport.SpotifyCredentialsValidator
+import com.vibemusic.app.data.playlistimport.SpotifyPlaylistImporter
+import com.vibemusic.app.data.playlistimport.YouTubePlaylistImporter
+import com.vibemusic.app.data.playlistimport.toLibraryTrack
 import com.vibemusic.app.data.provider.AudiusProvider
 import com.vibemusic.app.data.provider.ProviderArtist
 import com.vibemusic.app.data.provider.ProviderArtistDetail
@@ -81,6 +100,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -217,12 +237,43 @@ data class CsvImportState(
     val finished: Boolean = false
 )
 
+data class PlaylistImportUiState(
+    val url: String = "",
+    val link: PlaylistLink? = null,
+    val linkError: String? = null,
+    val analyzing: Boolean = false,
+    val analysed: Int = 0,
+    val total: Int = 0,
+    val playlist: ImportedPlaylist? = null,
+    val items: List<PlaylistImportItem> = emptyList(),
+    val sensitivity: MatchSensitivity = MatchSensitivity.BALANCED,
+    val error: String? = null,
+    val partial: Boolean = false,
+    val importing: Boolean = false,
+    val importedPlaylistId: Long? = null,
+    val importedCount: Int = 0,
+    val skipped: Int = 0,
+    val spotifyConfigured: Boolean = false,
+    val spotifyChecking: Boolean = false,
+    val spotifyError: String? = null,
+    val spotifySaved: Boolean = false,
+    val youtubeConfigured: Boolean = false
+) {
+    val platform: PlaylistPlatform? get() = link?.platform
+    val selectedCount: Int get() = items.count { it.selected && it.canAdd }
+    val canAnalyze: Boolean get() = !analyzing && url.isNotBlank()
+    val hasResults: Boolean get() = playlist != null && items.isNotEmpty()
+    val summary: Map<ImportStatus, Int>
+        get() = items.groupingBy { it.outcome.status }.eachCount()
+}
+
 class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = MusicRepository(application, SettingsStore(application))
     private val settings = repository.settings
     private val deezer = DeezerService()
-    private val audiusProvider = AudiusProvider()
+    private val audiusService = AudiusService()
+    private val audiusProvider = AudiusProvider(audiusService)
     private val providers = ProviderRegistry(listOf(audiusProvider))
     private val releases = GitHubReleaseService()
     private val installer = UpdateInstaller(application)
@@ -432,6 +483,21 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             extraHeaders = youtubeHeaders
         )
     }
+
+    private val spotifyCredentialStore = SpotifyCredentialStore(application)
+    private val playlistImportAnalyzer = PlaylistImportAnalyzer(
+        catalog = AudiusTrackCatalog(audiusService)
+    )
+    private val _playlistImport = MutableStateFlow(
+        PlaylistImportUiState(
+            spotifyConfigured = spotifyCredentialStore.hasCredentials(),
+            youtubeConfigured = youTube.isConfigured
+        )
+    )
+    val playlistImport: StateFlow<PlaylistImportUiState> = _playlistImport.asStateFlow()
+    private var playlistImportJob: Job? = null
+
+    val spotifyConfigured: Boolean get() = spotifyCredentialStore.hasCredentials()
 
     private val _update = MutableStateFlow(UpdateUiState())
     val update: StateFlow<UpdateUiState> = _update.asStateFlow()
@@ -868,6 +934,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 youTube = candidate
                 _youtubeSearch.value = _youtubeSearch.value.copy(configured = true)
                 lastYouTubeQuery = ""
+                _playlistImport.update { it.copy(youtubeConfigured = true) }
                 _youtubeKeyState.value = YouTubeKeyState(success = true)
                 notify("Clave de YouTube verificada y guardada en este dispositivo.")
             } catch (e: YouTubeException) {
@@ -888,11 +955,321 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         lastYouTubeQuery = ""
         _youtubeKeyState.value = YouTubeKeyState()
         _youtubeSearch.value = _youtubeSearch.value.copy(configured = youTube.isConfigured)
+        _playlistImport.update { it.copy(youtubeConfigured = hasYouTubeKeyForImport()) }
         notify("Clave de YouTube eliminada del dispositivo.")
     }
 
     fun dismissYouTubeKeyState() {
         _youtubeKeyState.value = YouTubeKeyState()
+    }
+
+    private fun hasYouTubeKeyForImport(): Boolean =
+        YouTubeCredentials.resolve(BuildConfig.YOUTUBE_API_KEY, youtubeKeyStore.load()).isNotBlank()
+
+    // ---------------- Playlist importer (Spotify / YouTube Music) ----------------
+
+    fun setPlaylistImportUrl(raw: String) {
+        if (_playlistImport.value.analyzing) {
+            playlistImportJob?.cancel()
+            playlistImportJob = null
+        }
+        val result = PlaylistLinkParser.parse(raw)
+        _playlistImport.update { current ->
+            current.copy(
+                url = raw,
+                link = (result as? PlaylistLinkResult.Valid)?.link,
+                linkError = null,
+                analyzing = false,
+                analysed = 0,
+                total = 0,
+                playlist = null,
+                items = emptyList(),
+                error = null,
+                partial = false,
+                importing = false,
+                importedPlaylistId = null,
+                importedCount = 0,
+                skipped = 0,
+                spotifySaved = false,
+                spotifyError = null
+            )
+        }
+    }
+
+    fun analyzePlaylistImport() {
+        val state = _playlistImport.value
+        if (state.analyzing || state.importing) return
+        val parsed = PlaylistLinkParser.parse(state.url)
+        if (parsed is PlaylistLinkResult.Invalid) {
+            _playlistImport.update { it.copy(linkError = parsed.message) }
+            return
+        }
+        val link = (parsed as PlaylistLinkResult.Valid).link
+
+        val spotifyCredentials: SpotifyCredentials?
+        val youtubeKey: String
+        when (link.platform) {
+            PlaylistPlatform.SPOTIFY -> {
+                spotifyCredentials = spotifyCredentialStore.load()
+                if (spotifyCredentials == null) {
+                    _playlistImport.update {
+                        it.copy(
+                            linkError = null,
+                            error = "Spotify necesita tus propias credenciales. Abre " +
+                                "«Credenciales de Spotify», pega el Client ID y el Client Secret " +
+                                "de tu app y vuelve a analizar la playlist."
+                        )
+                    }
+                    return
+                }
+                youtubeKey = ""
+            }
+
+            PlaylistPlatform.YOUTUBE_MUSIC -> {
+                spotifyCredentials = null
+                youtubeKey = YouTubeCredentials.resolve(
+                    BuildConfig.YOUTUBE_API_KEY,
+                    youtubeKeyStore.load()
+                )
+                if (youtubeKey.isBlank()) {
+                    _playlistImport.update {
+                        it.copy(
+                            linkError = null,
+                            error = "YouTube Music necesita una clave de YouTube Data API v3. " +
+                                "Añádela en «Credenciales de YouTube» y vuelve a analizar."
+                        )
+                    }
+                    return
+                }
+            }
+        }
+
+        playlistImportJob?.cancel()
+        _playlistImport.update {
+            it.copy(
+                link = link,
+                linkError = null,
+                analyzing = true,
+                analysed = 0,
+                total = 0,
+                playlist = null,
+                items = emptyList(),
+                error = null,
+                partial = false,
+                importing = false,
+                importedPlaylistId = null,
+                importedCount = 0,
+                skipped = 0
+            )
+        }
+
+        playlistImportJob = viewModelScope.launch {
+            try {
+                val imported = when (link.platform) {
+                    PlaylistPlatform.SPOTIFY -> SpotifyPlaylistImporter(
+                        credentials = spotifyCredentials
+                            ?: throw IllegalStateException("Faltan las credenciales de Spotify.")
+                    ).import(link)
+
+                    PlaylistPlatform.YOUTUBE_MUSIC -> YouTubePlaylistImporter(youtubeKey).import(link)
+                }
+                _playlistImport.update {
+                    it.copy(playlist = imported, total = imported.trackCount)
+                }
+                val sensitivity = _playlistImport.value.sensitivity
+                val local = repository.localTracks.value
+                val downloads = repository.downloads.first()
+                val analysed = playlistImportAnalyzer.analyze(
+                    playlist = imported,
+                    sensitivity = sensitivity,
+                    localTracks = local,
+                    downloadedTracks = downloads
+                ) { done, total, item ->
+                    _playlistImport.update { current ->
+                        if (!current.analyzing) return@update current
+                        val merged = (current.items
+                            .filterNot { it.source.position == item.source.position } + item)
+                            .sortedBy { it.source.position }
+                        current.copy(analysed = done, total = total, items = merged)
+                    }
+                }
+                _playlistImport.update {
+                    it.copy(
+                        analyzing = false,
+                        analysed = imported.trackCount,
+                        total = imported.trackCount,
+                        items = analysed,
+                        partial = false
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _playlistImport.update {
+                    it.copy(
+                        analyzing = false,
+                        partial = it.items.isNotEmpty(),
+                        error = e.message?.takeIf { message -> message.isNotBlank() }
+                            ?: "No se pudo analizar la playlist."
+                    )
+                }
+            }
+        }
+    }
+
+    fun cancelPlaylistImportAnalysis() {
+        playlistImportJob?.cancel()
+        playlistImportJob = null
+        _playlistImport.update {
+            if (!it.analyzing) it
+            else it.copy(
+                analyzing = false,
+                partial = it.items.isNotEmpty(),
+                items = PlaylistImportReducer.markDuplicates(it.items)
+            )
+        }
+    }
+
+    fun setPlaylistImportSensitivity(sensitivity: MatchSensitivity) {
+        _playlistImport.update {
+            it.copy(
+                sensitivity = sensitivity,
+                items = PlaylistImportReducer.reclassify(it.items, sensitivity.thresholds)
+            )
+        }
+    }
+
+    fun togglePlaylistImportSelection(position: Int) {
+        _playlistImport.update {
+            it.copy(items = PlaylistImportReducer.toggleSelection(it.items, position))
+        }
+    }
+
+    fun selectAllPlaylistImportItems(selected: Boolean) {
+        _playlistImport.update {
+            it.copy(items = PlaylistImportReducer.setAllEligible(it.items, selected))
+        }
+    }
+
+    fun choosePlaylistImportCandidate(position: Int, trackId: String) {
+        _playlistImport.update {
+            val chosen = PlaylistImportReducer.chooseCandidate(it.items, position, trackId)
+            it.copy(items = PlaylistImportReducer.markDuplicates(chosen))
+        }
+    }
+
+    fun addSelectedPlaylistTracks() {
+        val state = _playlistImport.value
+        val playlist = state.playlist ?: return
+        if (state.importing) return
+        if (state.importedPlaylistId != null) {
+            notify("Esta playlist ya se añadió a tu biblioteca.")
+            return
+        }
+        val selected = state.items.filter { it.selected && it.canAdd }
+        if (selected.isEmpty()) {
+            notify("Selecciona al menos una canción disponible para añadirla.")
+            return
+        }
+        _playlistImport.update { it.copy(importing = true, error = null) }
+        viewModelScope.launch {
+            try {
+                val entries = selected.mapNotNull { item ->
+                    val track = item.toLibraryTrack(playlist.artworkUrl) ?: return@mapNotNull null
+                    ImportedPlaylistEntry(
+                        source = item.source,
+                        track = track,
+                        confidence = item.outcome.confidence
+                    )
+                }
+                if (entries.isEmpty()) {
+                    _playlistImport.update {
+                        it.copy(
+                            importing = false,
+                            error = "Ninguna de las canciones seleccionadas tiene audio asociado."
+                        )
+                    }
+                    return@launch
+                }
+                val playlistId = repository.createImportedPlaylist(playlist, entries)
+                _playlistImport.update {
+                    it.copy(
+                        importing = false,
+                        importedPlaylistId = playlistId,
+                        importedCount = entries.size,
+                        skipped = state.items.size - entries.size
+                    )
+                }
+                notify("Playlist «${playlist.name}» añadida a tu biblioteca.")
+            } catch (e: Exception) {
+                _playlistImport.update {
+                    it.copy(
+                        importing = false,
+                        error = e.message?.takeIf { message -> message.isNotBlank() }
+                            ?: "No se pudo añadir la playlist a tu biblioteca."
+                    )
+                }
+            }
+        }
+    }
+
+    fun resetPlaylistImport() {
+        playlistImportJob?.cancel()
+        playlistImportJob = null
+        _playlistImport.update {
+            PlaylistImportUiState(
+                sensitivity = it.sensitivity,
+                spotifyConfigured = spotifyCredentialStore.hasCredentials(),
+                youtubeConfigured = hasYouTubeKeyForImport()
+            )
+        }
+    }
+
+    fun saveSpotifyCredentials(clientId: String, clientSecret: String) {
+        val error = SpotifyCredentialsValidator.validate(clientId, clientSecret)
+        if (error != null) {
+            _playlistImport.update { it.copy(spotifyError = error, spotifySaved = false) }
+            return
+        }
+        viewModelScope.launch {
+            _playlistImport.update {
+                it.copy(spotifyChecking = true, spotifyError = null, spotifySaved = false)
+            }
+            val credentials = SpotifyCredentials(clientId.trim(), clientSecret.trim())
+            try {
+                SpotifyPlaylistImporter(credentials).validateCredentials()
+                spotifyCredentialStore.save(credentials)
+                _playlistImport.update {
+                    it.copy(
+                        spotifyChecking = false,
+                        spotifyConfigured = true,
+                        spotifySaved = true,
+                        spotifyError = null
+                    )
+                }
+                notify("Credenciales de Spotify verificadas y guardadas cifradas.")
+            } catch (e: Exception) {
+                _playlistImport.update {
+                    it.copy(
+                        spotifyChecking = false,
+                        spotifyError = e.message?.takeIf { message -> message.isNotBlank() }
+                            ?: "No se pudieron verificar las credenciales de Spotify."
+                    )
+                }
+            }
+        }
+    }
+
+    fun clearSpotifyCredentials() {
+        spotifyCredentialStore.clear()
+        _playlistImport.update {
+            it.copy(
+                spotifyConfigured = false,
+                spotifySaved = false,
+                spotifyError = null
+            )
+        }
+        notify("Credenciales de Spotify eliminadas del dispositivo.")
     }
 
     private suspend fun runYouTubeSearch(query: String) {

@@ -9,7 +9,15 @@ con YouTube Data API v3 y los reproduce con el reproductor oficial embebido
 Deezer ni otras plataformas, no elude condiciones de acceso y solo descarga
 audio cuando el proveedor autoriza esa pista.
 
-La versión **3.0.0** convierte el catálogo en una experiencia unificada: una sola
+La versión **3.1.0** añade el **importador de playlists de Spotify y YouTube
+Music**: se pega un enlace público en Explorar → Descargas → «Importar
+playlist», se leen todas las canciones con las APIs oficiales y se buscan
+coincidencias en el catálogo de Audius con puntuación por título, artista, versión,
+duración, álbum e ISRC. Los resultados se agrupan por disponibilidad, las
+coincidencias dudosas necesitan confirmación y solo se añaden a la biblioteca las
+canciones seleccionadas, conservando el orden y los metadatos originales.
+
+La versión **3.0.0** convirtió el catálogo en una experiencia unificada: una sola
 búsqueda devuelve canciones completas, artistas, álbumes y listas de Audius, con
 pantallas de detalle propias y reproducción real; las vistas previas de Deezer
 quedan como fuente secundaria etiquetada. Añade descargas de Audius con un solo
@@ -147,6 +155,44 @@ reanudables, los perfiles de audio, el ecualizador con 12 presets y las listas d
   descargado (solo el que creó VibeMusic). Todo funciona sin Internet.
 - Los duplicados se evitan por clave de fuente y por título/artista, incluso
   después de reiniciar.
+
+### Importar playlist de Spotify y YouTube Music
+- Entrada **Explorar → Descargas → Importar playlist**, con campo para pegar la
+  URL o URI y detección automática de la plataforma.
+- **Spotify** usa su API oficial con el flujo *client credentials*: el usuario
+  configura su propio Client ID y Client Secret en «Credenciales». Se piden todas
+  las páginas, se conservan artistas primarios y secundarios, álbum, duración,
+  ISRC y posición, y se omiten archivos locales y episodios.
+- **YouTube Music** usa YouTube Data API v3 (la misma clave que el buscador de
+  YouTube o una propia): cabecera de la lista, todas las páginas de
+  `playlistItems` y duraciones reales por lotes. Solo se leen metadatos; la app
+  nunca descarga ni extrae audio de YouTube.
+- Las credenciales se guardan cifradas con Android Keystore y se verifican antes
+  de guardarlas. No se incluyen claves en el APK, el repositorio ni los registros.
+- **Análisis con progreso y cancelación**: cada canción se busca en Audius por
+  título y artista; el motor puntúa título, artista, versión, duración, álbum e
+  ISRC. Remix, slowed, sped up, instrumental, directo, cover, extendido,
+  acústico, remaster, radio edit y demo se comparan por separado: una versión
+  distinta nunca sustituye a la original aunque el título coincida.
+- **Estados**: Disponible (reproducción completa), Descargable (además con
+  descarga autorizada), Local (ya está en el dispositivo o descargada),
+  Coincidencia dudosa (requiere confirmar una candidata), No encontrada, No
+  disponible (Audius restringe la reproducción) y Error de consulta.
+- La reproducción y la descarga son permisos independientes: una pista puede
+  reproducirse sin poder descargarse. Las vistas previas de 30 s nunca cuentan
+  como canción completa.
+- **Selección parcial**: casillas por canción, «seleccionar todo» solo para filas
+  añadibles y confirmación de candidatas. «Añadir seleccionadas a mi biblioteca»
+  crea una lista nueva en una transacción, conserva el orden original, evita
+  duplicados por pista y por versión y guarda los metadatos de origen junto al
+  audio de Audius.
+- La lista importada se abre en la biblioteca como cualquier otra: se reproduce,
+  se descarga con `DownloadService` (progreso, tamaño, velocidad, cancelación,
+  reanudación y segundo plano) y funciona sin conexión si sus pistas se
+  descargaron.
+- **Room v4** añade columnas opcionales de origen y de importación con una
+  migración aditiva 3 → 4; los favoritos, listas, historial y descargas
+  existentes se conservan.
 
 ### Bluetooth y ecualizador
 - Detección de la salida de audio actual con las APIs públicas de Android
@@ -346,7 +392,19 @@ portada, metadatos, pista no descargable, compra en USDC, seguir al artista,
 acceso de descarga desactivado, stream con puerta y campos ausentes) y 4 pruebas
 del resolutor para descargas de Audius (URL autorizada, motivo visible, rechazo
 sin archivo y clave estable).
-En total son **81 pruebas unitarias** en 11 suites, todas correctas.
+Desde 3.1.0 se añaden 59 pruebas del importador: enlaces válidos e inválidos de
+Spotify y YouTube, URI de Spotify, paginación y listas grandes, playlists
+vacías o privadas, archivos locales y episodios, duraciones ISO-8601 por lotes,
+errores de cuota y credenciales, motor de coincidencias (original, remix,
+remixes distintos, slowed, official audio, duración incompatible, artista
+distinto, ISRC coincidente y en conflicto, ambigüedad y archivo local),
+reducers (duplicados por fuente y por audio, selección, confirmación manual,
+reclasificación por sensibilidad, resumen y resultados parciales) y análisis
+paralelo con orden, errores aislados y reutilización de descargas.
+En total son **143 pruebas unitarias** en 19 suites, todas correctas. Además se
+ejecutan 2 pruebas instrumentadas de Room que abren una base de datos v3 real,
+aplican `MIGRATION_3_4` y comprueban que favoritos, listas, descargas, historial
+y eventos se conservan y que las columnas de importación funcionan.
 
 En el emulador API 37 se han probado además la barra inferior de cuatro
 apartados (a 411 dp y a 360 dp de ancho), Samples, el buscador online de Deezer,
@@ -415,10 +473,15 @@ certificado de firma estable
 
 ## Arquitectura
 
-- `data/`: Room (v3 con migración desde 1.x y 2.x), MediaStore, descargas,
+- `data/`: Room (v4 con migraciones aditivas 1→2→3→4), MediaStore, descargas,
   ajustes, CSV, Deezer, GitHub, Google y YouTube Data API v3 (`data/youtube`).
 - `data/audius/`: modelos, parsers puros y cliente de la API oficial de Audius
   con caché TTL, reintentos y traducción de errores.
+- `data/playlistimport/`: dominio puro del importador (enlaces, modelos,
+  `TrackMatchEngine`, reducer), importadores de Spotify y YouTube Music,
+  analizador con búsquedas paralelas y `SpotifyCredentialStore` cifrado. Solo
+  usa las APIs oficiales de cada plataforma y el catálogo de Audius para el
+  audio.
 - `data/provider/`: contrato `MusicProvider`, registro y `AudiusProvider`. Un
   futuro proveedor (por ejemplo Tuned Global) solo implementa la interfaz; no se
   simula ninguna conexión comercial ni se incluyen credenciales.
@@ -429,8 +492,9 @@ certificado de firma estable
   solicitud persistente.
 - `playback/`: servicio Media3, controlador y sesión multimedia.
 - `ui/`: pantallas Compose (incluidas `ForYouScreen`, `DownloadsScreen`,
-  `BluetoothScreen`, `PlaylistDetailScreen`, `SamplesScreen`, `YouTubeScreen` y
-  `YouTubePlayerScreen` con su WebView), componentes, tema y diálogos.
+  `PlaylistImportScreen`, `BluetoothScreen`, `PlaylistDetailScreen`,
+  `SamplesScreen`, `YouTubeScreen` y `YouTubePlayerScreen` con su WebView),
+  componentes, tema y diálogos.
 - `assets/youtube_player.html`: plantilla auditable del reproductor oficial
   (IFrame Player API, `playsinline`, sin extracción de audio).
 - `viewmodel/`: estado de la interfaz y acciones del usuario.

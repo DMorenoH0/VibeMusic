@@ -66,6 +66,7 @@ import com.vibemusic.app.ui.screens.NowPlayingScreen
 import com.vibemusic.app.ui.screens.OnlineAlbumScreen
 import com.vibemusic.app.ui.screens.OnlineArtistScreen
 import com.vibemusic.app.ui.screens.PlaylistDetailScreen
+import com.vibemusic.app.ui.screens.PlaylistImportScreen
 import com.vibemusic.app.ui.screens.QueueScreen
 import com.vibemusic.app.ui.screens.SearchScreen
 import com.vibemusic.app.ui.screens.SamplesScreen
@@ -459,7 +460,16 @@ fun VibeMusicApp(vm: VibeViewModel) {
                     },
                     onDownload = { showDownload = true },
                     onImport = { importLauncher.launch(arrayOf("audio/*")) },
+                    onImportPlaylist = { route = "playlistImport" },
                     onBack = { route = null }
+                )
+            }
+
+            route == "playlistImport" -> Box(overlayModifier) {
+                PlaylistImportScreen(
+                    vm = vm,
+                    onBack = { route = "downloads" },
+                    onOpenPlaylist = { id -> route = "playlist:$id" }
                 )
             }
 

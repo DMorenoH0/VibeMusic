@@ -6,6 +6,7 @@ import com.vibemusic.app.data.db.DownloadEntity
 import com.vibemusic.app.data.db.FavoriteEntity
 import com.vibemusic.app.data.db.ListeningEventEntity
 import com.vibemusic.app.data.db.PlaylistEntity
+import com.vibemusic.app.data.db.PlaylistTrackEntity
 import com.vibemusic.app.data.db.PlaylistWithCount
 import com.vibemusic.app.data.db.RecentEntity
 import com.vibemusic.app.data.db.VibeMusicDatabase
@@ -17,6 +18,9 @@ import com.vibemusic.app.data.db.toPlaylistTrack
 import com.vibemusic.app.data.download.DownloadRequest
 import com.vibemusic.app.data.model.Track
 import com.vibemusic.app.data.model.TrackSource
+import com.vibemusic.app.data.playlistimport.ImportedPlaylist
+import com.vibemusic.app.data.playlistimport.ImportedPlaylistEntry
+import com.vibemusic.app.data.playlistimport.TrackMatchEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -119,6 +123,68 @@ class MusicRepository(context: Context, val settings: SettingsStore) {
         val clean = name.trim().take(60).ifBlank { "Mi lista" }
         val now = System.currentTimeMillis()
         dao.insertPlaylist(PlaylistEntity(name = clean, createdAt = now, updatedAt = now))
+    }
+
+    /**
+     * Stores an imported playlist and its selected songs atomically. The
+     * original catalogue metadata travels with every row, the resolved audio
+     * URI stays playable and the order is the original playlist order.
+     */
+    suspend fun createImportedPlaylist(
+        playlist: ImportedPlaylist,
+        entries: List<ImportedPlaylistEntry>
+    ): Long = withContext(Dispatchers.IO) {
+        if (entries.isEmpty()) {
+            throw IllegalArgumentException("No hay canciones seleccionadas para importar.")
+        }
+        val now = System.currentTimeMillis()
+        val tracks = ArrayList<PlaylistTrackEntity>(entries.size)
+        val seenTracks = HashSet<String>()
+        val seenSources = HashSet<String>()
+        entries.sortedBy { it.source.position }.forEach { entry ->
+            val sourceKey = TrackMatchEngine.dedupeKey(entry.source)
+            if (!seenTracks.add(entry.track.id) || !seenSources.add(sourceKey)) {
+                return@forEach
+            }
+            tracks.add(
+                PlaylistTrackEntity(
+                    playlistId = 0L,
+                    trackId = entry.track.id,
+                    title = entry.track.title,
+                    artist = entry.track.artist,
+                    album = entry.track.album,
+                    uri = entry.track.uri,
+                    artworkUri = entry.track.artworkUri ?: playlist.artworkUrl,
+                    durationMs = entry.track.durationMs,
+                    source = entry.track.source.name,
+                    position = tracks.size,
+                    addedAt = now,
+                    downloadUrl = entry.track.downloadUrl,
+                    downloadBlockedReason = entry.track.downloadBlockedReason,
+                    importSourceTitle = entry.source.title,
+                    importSourceArtist = entry.source.artistLine,
+                    importSourceAlbum = entry.source.album,
+                    importSourcePosition = entry.source.position,
+                    importPlatform = playlist.platform.name,
+                    matchConfidence = entry.confidence
+                )
+            )
+        }
+        if (tracks.isEmpty()) {
+            throw IllegalArgumentException("Todas las canciones seleccionadas eran duplicados.")
+        }
+        val entity = PlaylistEntity(
+            name = playlist.name.trim().take(80).ifBlank { "Playlist importada" },
+            createdAt = now,
+            updatedAt = now,
+            coverUri = playlist.artworkUrl,
+            sourcePlatform = playlist.platform.name,
+            sourcePlaylistId = playlist.playlistId,
+            sourceUrl = playlist.sourceUrl,
+            sourceOwner = playlist.owner,
+            sourceDescription = playlist.description
+        )
+        dao.insertImportedPlaylist(entity, tracks)
     }
 
     suspend fun renamePlaylist(id: Long, name: String) = withContext(Dispatchers.IO) {

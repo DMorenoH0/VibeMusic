@@ -65,7 +65,8 @@ data class AudiusTrack(
     val repostCount: Long,
     val releaseDate: String?,
     val permalink: String?,
-    val license: String?
+    val license: String?,
+    val isrc: String? = null
 ) {
     /**
      * A gated or non-streamable track cannot be played by an anonymous client.
@@ -109,7 +110,8 @@ data class AudiusTrack(
             artistId = user?.id?.takeIf { it.isNotBlank() },
             previewOnly = false,
             downloadUrl = if (permission.allowed) AudiusEndpoints.download(id) else null,
-            downloadBlockedReason = permission.reason
+            downloadBlockedReason = permission.reason,
+            isrc = isrc
         )
     }
 }
@@ -258,7 +260,8 @@ fun parseAudiusTrack(obj: JSONObject): AudiusTrack {
         repostCount = obj.optLong("repost_count", 0L),
         releaseDate = obj.optString("release_date").takeIf { it.isNotBlank() },
         permalink = obj.optString("permalink").takeIf { it.isNotBlank() },
-        license = obj.optString("license").takeIf { it.isNotBlank() }
+        license = obj.optString("license").takeIf { it.isNotBlank() },
+        isrc = obj.optString("isrc").takeIf { it.isNotBlank() }
     )
 }
 

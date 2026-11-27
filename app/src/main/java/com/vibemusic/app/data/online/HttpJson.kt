@@ -3,6 +3,7 @@ package com.vibemusic.app.data.online
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -38,28 +39,60 @@ object HttpJson {
         throw lastError ?: IOException("No se pudo conectar con el servidor.")
     }
 
-    private fun request(url: String, timeoutMs: Int, headers: Map<String, String>): String {
+    @Throws(IOException::class)
+    fun postForm(
+        url: String,
+        form: Map<String, String>,
+        timeoutMs: Int = 12_000,
+        headers: Map<String, String> = emptyMap()
+    ): String {
+        val body = form.entries.joinToString("&") { (key, value) ->
+            URLEncoder.encode(key, "UTF-8") + "=" + URLEncoder.encode(value, "UTF-8")
+        }
+        return request(
+            url = url,
+            timeoutMs = timeoutMs,
+            headers = headers + mapOf(
+                "Content-Type" to "application/x-www-form-urlencoded",
+                "Accept" to "application/json"
+            ),
+            method = "POST",
+            body = body
+        )
+    }
+
+    private fun request(
+        url: String,
+        timeoutMs: Int,
+        headers: Map<String, String>,
+        method: String = "GET",
+        body: String? = null
+    ): String {
         val parsed = URL(url)
         if (parsed.protocol != "https") throw IOException("Solo se admiten conexiones https.")
         val connection = (parsed.openConnection() as HttpURLConnection).apply {
             connectTimeout = timeoutMs
             readTimeout = timeoutMs
-            requestMethod = "GET"
+            requestMethod = method
             instanceFollowRedirects = true
             setRequestProperty("User-Agent", USER_AGENT)
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Accept-Encoding", "identity")
             headers.forEach { (name, value) -> setRequestProperty(name, value) }
         }
+        if (body != null) {
+            connection.doOutput = true
+            connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+        }
         try {
             val code = connection.responseCode
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            val body = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+            val responseBody = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
             if (code !in 200..299) {
-                throw HttpStatusException(code, body)
+                throw HttpStatusException(code, responseBody)
             }
-            if (body.isBlank()) throw IOException("El servidor devolvió una respuesta vacía.")
-            return body
+            if (responseBody.isBlank()) throw IOException("El servidor devolvió una respuesta vacía.")
+            return responseBody
         } finally {
             connection.disconnect()
         }

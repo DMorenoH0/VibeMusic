@@ -131,18 +131,22 @@ jobs:
             Descarga VibeMusic.apk y ábrelo en tu dispositivo Android.
             VibeMusic comprueba este hash antes de ofrecer la instalación.
             También se adjuntan el archivo de suma SHA-256 y el código fuente
-            limpio en VibeMusic-3.0.0-source.zip (sin build, .git ni secretos).
+            limpio en VibeMusic-${{ steps.build.outputs.version }}-source.zip
+            (sin build, .git ni secretos).
 
-            Novedades de VibeMusic 3.0:
-            - Audius como fuente principal de canciones completas con su API oficial v1: búsqueda de pistas, artistas, álbumes y listas, reproducción completa y pantallas de detalle.
-            - Buscador unificado con Audius y las vistas previas de Deezer como fuente secundaria etiquetada.
-            - Descarga autorizada con un solo toque solo cuando la API de Audius declara la pista descargable y sin condiciones pendientes; portada y metadatos originales, progreso, velocidad, ETA, cancelación y reanudación.
-            - Motivos claros cuando la descarga no está disponible: artista sin autorización, descarga desactivada, compra en USDC, seguir al artista, NFT o token.
-            - Pistas de Audius en favoritos, listas, historial, cola, reproductor y biblioteca; migración aditiva de base de datos 2→3.
+            Novedades de VibeMusic 3.1:
+            - Importador de playlists de Spotify y YouTube Music en Explorar → Descargas → «Importar playlist», con detección de plataforma, progreso y cancelación.
+            - Spotify mediante su API oficial (client credentials con credenciales propias del usuario, cifradas con Android Keystore) y YouTube Music mediante YouTube Data API v3, con paginación completa y sin extraer audio de ninguna de las dos plataformas.
+            - Coincidencias reales en Audius con puntuación por título, artista, versión (remix, slowed, instrumental, directo, cover, etc.), duración, álbum e ISRC; las versiones incompatibles se rechazan y las dudosas requieren confirmación.
+            - Estados Disponible, Descargable, Local, Coincidencia dudosa, No encontrada y No disponible; selección individual o múltiple y añadido parcial a la biblioteca conservando el orden y los metadatos originales.
+            - Migración aditiva de Room 3 → 4 que conserva favoritos, listas, historial y descargas.
+            - 143 pruebas unitarias y 2 pruebas instrumentadas de migración ejecutadas en emulador API 37.
 
-            Se mantienen las funciones de 2.x: cinco pestañas, «Para ti» local, descargas reanudables, biblioteca offline, perfiles de audio, ecualizador con 12 presets y listas.
+            Se mantienen las funciones de 3.0 y 2.x: cinco pestañas, «Para ti» local, buscador unificado con Audius y Deezer, artistas, álbumes y listas de Audius, descargas reanudables, biblioteca offline, perfiles de audio, ecualizador con 12 presets y listas.
 
             Limitaciones honestas:
+            - Importar una playlist real necesita credenciales propias de Spotify o una clave válida de YouTube Data API v3; sin ellas la app lo explica y no inventa resultados.
+            - Las coincidencias dependen del catálogo público de Audius; una canción no publicada allí aparece como «No encontrada».
             - Las vistas previas de Deezer tienen licencia de reproducción, no de descarga, y se muestran como no disponibles.
             - Audius requiere conexión para streaming; sin conexión solo se reproducen las descargas autorizadas.
             - No se procesan pagos ni se eluden condiciones de acceso de Audius.

@@ -22,6 +22,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FolderOpen
+import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -61,6 +62,7 @@ fun DownloadsScreen(
     onTrackMore: (Track) -> Unit,
     onDownload: () -> Unit,
     onImport: () -> Unit,
+    onImportPlaylist: () -> Unit = {},
     onBack: (() -> Unit)? = null
 ) {
     val downloads by vm.downloads.collectAsStateWithLifecycle()
@@ -140,6 +142,47 @@ fun DownloadsScreen(
                         onClick = onImport,
                         modifier = Modifier.weight(1f)
                     )
+                }
+            }
+
+            item {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = VibeSurface,
+                    onClick = onImportPlaylist,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Rounded.PlaylistAdd,
+                            contentDescription = null,
+                            tint = VibeRed,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "Importar playlist",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = VibeCream
+                            )
+                            Text(
+                                "Spotify o YouTube Music · audio completo desde Audius",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = VibeMuted
+                            )
+                        }
+                        Text(
+                            "Abrir",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = VibeRed
+                        )
+                    }
                 }
             }
 

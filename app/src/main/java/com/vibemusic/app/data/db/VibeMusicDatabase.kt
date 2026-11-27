@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         DownloadEntity::class,
         ListeningEventEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class VibeMusicDatabase : RoomDatabase() {
@@ -76,6 +76,28 @@ abstract class VibeMusicDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * 3.1 adds the origin of imported playlists and keeps the original
+         * Spotify/YouTube metadata next to the resolved Audius audio. Every
+         * column is nullable, so existing lists, favourites and downloads are
+         * untouched.
+         */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE playlists ADD COLUMN sourcePlatform TEXT")
+                db.execSQL("ALTER TABLE playlists ADD COLUMN sourcePlaylistId TEXT")
+                db.execSQL("ALTER TABLE playlists ADD COLUMN sourceUrl TEXT")
+                db.execSQL("ALTER TABLE playlists ADD COLUMN sourceOwner TEXT")
+                db.execSQL("ALTER TABLE playlists ADD COLUMN sourceDescription TEXT")
+                db.execSQL("ALTER TABLE playlist_tracks ADD COLUMN importSourceTitle TEXT")
+                db.execSQL("ALTER TABLE playlist_tracks ADD COLUMN importSourceArtist TEXT")
+                db.execSQL("ALTER TABLE playlist_tracks ADD COLUMN importSourceAlbum TEXT")
+                db.execSQL("ALTER TABLE playlist_tracks ADD COLUMN importSourcePosition INTEGER")
+                db.execSQL("ALTER TABLE playlist_tracks ADD COLUMN importPlatform TEXT")
+                db.execSQL("ALTER TABLE playlist_tracks ADD COLUMN matchConfidence REAL")
+            }
+        }
+
         fun get(context: Context): VibeMusicDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -83,7 +105,7 @@ abstract class VibeMusicDatabase : RoomDatabase() {
                     VibeMusicDatabase::class.java,
                     "vibemusic.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .fallbackToDestructiveMigration()
                     .build()
                     .also { instance = it }

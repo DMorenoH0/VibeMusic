@@ -87,6 +87,23 @@ abstract class VibeDao {
         position: Int
     )
 
+    /**
+     * Creates an imported playlist and its tracks in one transaction. If the
+     * process dies mid-way, Room rolls back, so the user never sees a partial
+     * playlist with missing songs.
+     */
+    @Transaction
+    open suspend fun insertImportedPlaylist(
+        playlist: PlaylistEntity,
+        tracks: List<PlaylistTrackEntity>
+    ): Long {
+        val id = insertPlaylist(playlist)
+        tracks.forEach { track ->
+            upsertPlaylistTrack(track.copy(playlistId = id))
+        }
+        return id
+    }
+
     // ---------- Recently played ----------
     @Query("SELECT * FROM recent ORDER BY playedAt DESC LIMIT 20")
     abstract fun observeRecent(): Flow<List<RecentEntity>>

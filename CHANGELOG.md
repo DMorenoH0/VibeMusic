@@ -3,6 +3,54 @@
 Todas las versiones publicadas de VibeMusic. El formato sigue la idea de
 «Keep a Changelog» y las versiones usan SemVer.
 
+## [3.1.0] - 27 de noviembre de 2026
+
+### Añadido
+
+- **Importador de playlists de Spotify y YouTube Music** en
+  Explorar → Descargas → «Importar playlist». Se pega el enlace público, se
+  detecta la plataforma y se analizan todas las canciones con progreso y
+  cancelación.
+- **Spotify con su API oficial**: flujo *client credentials* con el Client ID y
+  el Client Secret de la app del propio usuario, guardados cifrados con Android
+  Keystore. Paginación completa, artistas primarios y secundarios, álbum,
+  duración, ISRC y posición original. Los archivos locales y los episodios se
+  descartan sin inventar canciones.
+- **YouTube Music con YouTube Data API v3**: cabecera de la playlist y todas las
+  páginas de `playlistItems`, con duraciones reales por lotes de `videos.list`.
+  Solo se leen metadatos; nunca se descarga ni se extrae audio de YouTube.
+- **Motor de coincidencias Audius** que puntúa título, artista, versión
+  (remix, slowed, sped up, instrumental, directo, cover, extendido, acústico,
+  remaster, radio edit, demo), duración, álbum e ISRC. Las versiones
+  incompatibles se rechazan aunque el título sea idéntico, y dos resultados muy
+  parecidos se marcan como dudosos para que el usuario elija.
+- **Estados por canción**: Disponible, Descargable, Local, Coincidencia dudosa,
+  No encontrada, No disponible y Error de consulta, con selección individual,
+  «seleccionar todo», confirmación de candidatas y añadido parcial.
+- **Biblioteca con orden original**: la playlist se crea en una sola transacción
+  con la posición original, los metadatos de Spotify/YouTube y la referencia al
+  audio completo de Audius. Se evitan duplicados por pista y por versión.
+- **Room v4** con migración aditiva 3 → 4: columnas de origen en `playlists` y
+  de metadatos de importación en `playlist_tracks`. Favoritos, listas,
+  historial y descargas existentes se conservan.
+- **Credenciales configurables**: sección «Credenciales» en la pantalla de
+  importación, con verificación antes de guardar, borrado y almacenamiento
+  cifrado. Nunca se incluyen claves en el APK ni en el repositorio.
+- **Pruebas**: 143 pruebas unitarias (enlaces, motor de coincidencias,
+  reducers, paginación y errores de ambos importadores, análisis parcial y
+  duplicados) y 2 pruebas instrumentadas de la migración 3 → 4 ejecutadas en
+  emulador API 37.
+
+### Limitaciones conocidas
+
+- Importar una playlist real requiere credenciales propias de Spotify o una
+  clave válida de YouTube Data API v3; sin ellas la app lo explica y no simula
+  resultados.
+- Las coincidencias dependen del catálogo público de Audius: una canción que no
+  esté publicada allí aparecerá como «No encontrada».
+- Las pruebas de reproducción y descarga siguen limitadas al emulador; no hay
+  teléfono físico ni Bluetooth real en este entorno.
+
 ## [3.0.0] - 21 de noviembre de 2026
 
 ### Añadido

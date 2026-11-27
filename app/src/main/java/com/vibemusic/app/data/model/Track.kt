@@ -46,7 +46,14 @@ data class Track(
      * of a download button so the user never starts a transfer that the rights
      * holder has not allowed.
      */
-    val downloadBlockedReason: String? = null
+    val downloadBlockedReason: String? = null,
+    /**
+     * International Standard Recording Code when the catalogue exposes it.
+     * Audius does not publish ISRC in its public track object, so this stays
+     * null for provider tracks; the import matcher only uses it when both the
+     * imported track and the audio candidate carry one.
+     */
+    val isrc: String? = null
 ) {
     val subtitle: String
         get() = when {

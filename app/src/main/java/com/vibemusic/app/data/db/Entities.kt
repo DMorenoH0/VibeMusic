@@ -28,7 +28,13 @@ data class PlaylistEntity(
     val name: String,
     val createdAt: Long,
     val updatedAt: Long,
-    val coverUri: String? = null
+    val coverUri: String? = null,
+    /** Spotify or YouTube Music when the playlist came from the importer. */
+    val sourcePlatform: String? = null,
+    val sourcePlaylistId: String? = null,
+    val sourceUrl: String? = null,
+    val sourceOwner: String? = null,
+    val sourceDescription: String? = null
 )
 
 @Entity(tableName = "playlist_tracks", primaryKeys = ["playlistId", "trackId"])
@@ -45,7 +51,14 @@ data class PlaylistTrackEntity(
     val position: Int,
     val addedAt: Long,
     val downloadUrl: String? = null,
-    val downloadBlockedReason: String? = null
+    val downloadBlockedReason: String? = null,
+    /** Original catalogue metadata, kept even when the audio came from Audius. */
+    val importSourceTitle: String? = null,
+    val importSourceArtist: String? = null,
+    val importSourceAlbum: String? = null,
+    val importSourcePosition: Int? = null,
+    val importPlatform: String? = null,
+    val matchConfidence: Double? = null
 )
 
 @Entity(tableName = "recent")
